@@ -4,21 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RAID Performance Calculator</title>
-  <!-- SEO & social sharing -->
   <meta name="description" content="Interactive RAID Performance Calculator — Compare read/write speeds, storage capacity, and redundancy for RAID levels.">
-  <link rel="canonical" href="https://bradgarrison.github.io/raid-performance-calculator/" />
-  <!-- Open Graph -->
-  <meta property="og:title" content="RAID Performance Calculator" />
-  <meta property="og:description" content="Interactive RAID Performance Calculator — Compare read/write speeds, storage capacity, and redundancy for RAID levels." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://bradgarrison.github.io/raid-performance-calculator/" />
-  <meta property="og:image" content="https://bradgarrison.github.io/raid-performance-calculator/og-image.png" />
-  <meta property="og:image:alt" content="Screenshot of the RAID Performance Calculator UI" />
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="RAID Performance Calculator" />
-  <meta name="twitter:description" content="Interactive RAID Performance Calculator — Compare read/write speeds, storage capacity, and redundancy for RAID levels." />
-  <meta name="twitter:image" content="https://bradgarrison.github.io/raid-performance-calculator/og-image.png" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   <style>
     :root { --bg1:#667eea; --bg2:#764ba2; --text:#333; --muted:#666; --primary:#007bff; --danger:#dc3545; }
@@ -75,6 +61,29 @@
     .warning-warning { background: #fff3cd; border-color: #ffc107; color: #856404; }
     .warning-info { background: #d1ecf1; border-color: #17a2b8; color: #0c5460; }
     .warning-icon { font-weight: bold; margin-right: 8px; }
+    .comparison-section { margin: 16px 0; }
+    .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .comparison-card { background: #fff; border: 2px solid #e0e0e0; border-radius: 10px; padding: 16px; }
+    .comparison-current { border-color: #007bff; background: #f8f9ff; }
+    .comparison-locked { border-color: #6c757d; background: #f8f9fa; }
+    .comparison-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .comparison-title { font-weight: 600; color: #333; }
+    .comparison-subtitle { font-size: 0.9em; color: #666; }
+    .comparison-triangle { margin: 12px 0; }
+    .comparison-triangle-bar { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    .comparison-triangle-label { flex: 0 0 80px; font-size: 0.8em; font-weight: 600; }
+    .comparison-triangle-progress { flex: 1; height: 16px; background: #e9ecef; border-radius: 8px; overflow: hidden; }
+    .comparison-triangle-fill { height: 100%; border-radius: 8px; }
+    .comparison-triangle-value { flex: 0 0 35px; text-align: right; font-weight: 600; font-size: 0.8em; }
+    .comparison-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .comparison-stat { text-align: center; padding: 8px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; }
+    .comparison-stat-label { font-size: 0.7em; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+    .comparison-stat-value { font-weight: 600; color: #333; }
+    .comparison-controls { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
+    .comparison-btn { padding: 8px 16px; border: 1px solid #007bff; border-radius: 6px; background: #fff; color: #007bff; cursor: pointer; font-size: 0.9em; transition: all 0.2s; }
+    .comparison-btn:hover { background: #007bff; color: #fff; }
+    .comparison-btn.danger { border-color: #dc3545; color: #dc3545; }
+    .comparison-btn.danger:hover { background: #dc3545; color: #fff; }
     .notes { background:#f8f9fa; border-left:4px solid var(--primary); padding:18px; margin:16px 0 0; border-radius:0 8px 8px 0; }
     .notes h3 { color:var(--primary); margin:0 0 8px; }
     .notes ul { margin:8px 0 0 18px; }
@@ -90,6 +99,8 @@
       .tab-buttons { gap: 8px; }
       .tab-btn { padding: 8px 12px; font-size: 0.9em; }
       .score-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+      .comparison-grid { grid-template-columns: 1fr; gap: 12px; }
+      .comparison-stats { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -135,14 +146,14 @@
           <option value="24">24 TB</option>
         </select>
       </div>
-      <div class="drive-selector" id="mirror-wrapper" title="Number of copies per mirror vdev (ZFS mirrors)">
+      <div class="drive-selector" id="mirror-wrapper">
         <label for="mirror-width">Mirror width:</label>
         <select id="mirror-width">
           <option value="2" selected>2-way</option>
           <option value="3">3-way</option>
         </select>
       </div>
-      <div class="drive-selector" id="vdev-wrapper" title="Number of disks per RAIDZ vdev">
+      <div class="drive-selector" id="vdev-wrapper">
         <label for="vdev-width">RAIDZ vdev width:</label>
         <select id="vdev-width">
           <option value="4" selected>4</option>
@@ -152,7 +163,7 @@
           <option value="12">12</option>
         </select>
       </div>
-      <div class="drive-selector" id="workload-wrapper" title="Workload affects write performance calculations">
+      <div class="drive-selector" id="workload-wrapper">
         <label for="workload-mode">Workload:</label>
         <select id="workload-mode">
           <option value="seq" selected>File Server (large files)</option>
@@ -161,7 +172,7 @@
           <option value="video">Video Editing (sequential)</option>
         </select>
       </div>
-      <div class="drive-selector" id="perf-model-wrapper" title="Theoretical = perfect scaling, Real-World = includes controller limits and bottlenecks">
+      <div class="drive-selector" id="perf-model-wrapper">
         <label for="perf-model">Performance Model:</label>
         <select id="perf-model">
           <option value="theoretical" selected>Theoretical</option>
@@ -173,17 +184,17 @@
       <label><input type="checkbox" id="binary-units"> Use TiB (binary)</label>
       <label><input type="checkbox" id="reserve-10"> Reserve 10% free space</label>
     </div>
-    <div class="tab-buttons" role="tablist" aria-label="RAID type">
-      <button class="tab-btn active" id="mirror-btn" aria-pressed="true">RAID 1</button>
-      <button class="tab-btn" id="raid0-btn" aria-pressed="false">RAID 0</button>
-      <button class="tab-btn" id="raid10-btn" aria-pressed="false">RAID 10</button>
-      <button class="tab-btn" id="raid5-btn" aria-pressed="false">RAID 5</button>
-      <button class="tab-btn" id="raid6-btn" aria-pressed="false">RAID 6</button>
-      <button class="tab-btn" id="raidz1-btn" aria-pressed="false">RAIDZ1</button>
-      <button class="tab-btn" id="raidz2-btn" aria-pressed="false">RAIDZ2</button>
-      <button class="tab-btn" id="raidz3-btn" aria-pressed="false">RAIDZ3</button>
+    <div class="tab-buttons">
+      <button class="tab-btn active" id="mirror-btn">RAID 1</button>
+      <button class="tab-btn" id="raid0-btn">RAID 0</button>
+      <button class="tab-btn" id="raid10-btn">RAID 10</button>
+      <button class="tab-btn" id="raid5-btn">RAID 5</button>
+      <button class="tab-btn" id="raid6-btn">RAID 6</button>
+      <button class="tab-btn" id="raidz1-btn">RAIDZ1</button>
+      <button class="tab-btn" id="raidz2-btn">RAIDZ2</button>
+      <button class="tab-btn" id="raidz3-btn">RAIDZ3</button>
     </div>
-    <div id="invalid-warning" class="inline-note hidden" role="alert" aria-live="polite"></div>
+    <div id="invalid-warning" class="inline-note hidden"></div>
     <div id="raid-explanation" class="config-info">
       <h4 id="explanation-title">Configuration Details</h4>
       <div id="explanation-content"></div>
@@ -192,7 +203,7 @@
     </div>
     <hr class="section-divider">
     <div class="chart-container">
-      <canvas id="chart" aria-label="RAID performance chart" role="img"></canvas>
+      <canvas id="chart"></canvas>
     </div>
     <div class="storage-info">
       <h4>Storage Breakdown</h4>
@@ -200,29 +211,14 @@
         <p style="text-align:center; color:#666; font-style:italic; margin:8px 0;">Select a drive size to see storage breakdown</p>
       </div>
     </div>
-    <div id="rebuild-note" class="inline-note hidden" role="note" aria-label="Rebuild time estimate">
+    <div id="rebuild-note" class="inline-note hidden">
       <h5>Rebuild time (estimate)</h5>
       <p id="rebuild-note-text"></p>
     </div>
   </div>
+
   <script>
-    // Error handling
-    window.onerror = function(message, source, lineno, colno, error) {
-      const warn = document.getElementById('invalid-warning');
-      if (!warn) return;
-      warn.classList.remove('hidden');
-      warn.innerHTML = `<h5>Script error</h5><p style="margin:4px 0 0">${String(message)}<br><small>${source || ''}:${lineno || ''}:${colno || ''}</small></p>`;
-    };
-
-    // Chart.js setup
-    const hasChart = typeof window.Chart !== 'undefined';
-    if (hasChart) { Chart.defaults.color = '#333'; }
-
-    // Constants
-    const RAID_LABEL = { mirror:'RAID 1', raid0:'RAID 0', raid10:'RAID 10', raid5:'RAID 5', raid6:'RAID 6', raidz1:'RAIDZ1', raidz2:'RAIDZ2', raidz3:'RAIDZ3' };
-    const MIN_DRIVES = { raid0:2, mirror:2, raid10:4, raid5:3, raid6:4, raidz1:3, raidz2:4, raidz3:5 };
-
-    // Global state
+    // Global state variables
     let chart = null;
     let currentDriveCount = 4;
     let currentRaidType = 'mirror';
@@ -232,27 +228,55 @@
     let advancedMode = false;
     let workloadMode = 'seq';
     let perfModel = 'theoretical';
+    let comparisonMode = false;
+    let lockedConfig = null;
 
-    // Helper functions
+    // Constants
+    const RAID_LABEL = { 
+      mirror:'RAID 1', raid0:'RAID 0', raid10:'RAID 10', 
+      raid5:'RAID 5', raid6:'RAID 6', raidz1:'RAIDZ1', 
+      raidz2:'RAIDZ2', raidz3:'RAIDZ3' 
+    };
+    const MIN_DRIVES = { 
+      raid0:2, mirror:2, raid10:4, raid5:3, 
+      raid6:4, raidz1:3, raidz2:4, raidz3:5 
+    };
+
+    // Initialize Chart.js
+    const hasChart = typeof window.Chart !== 'undefined';
+    if (hasChart) { Chart.defaults.color = '#333'; }
+
+    // Configuration validation
     function configError(raidType, driveCount) {
       const min = MIN_DRIVES[raidType] || 1;
-      if (driveCount < min) return `${RAID_LABEL[raidType]} requires at least ${min} drives.`;
-      if (raidType === 'raid10' && (driveCount % mirrorWidth !== 0)) return `RAID 10 requires a multiple of ${mirrorWidth} drives for ${mirrorWidth}-way mirrors.`;
+      if (driveCount < min) {
+        return `${RAID_LABEL[raidType]} requires at least ${min} drives.`;
+      }
+      if (raidType === 'raid10' && (driveCount % mirrorWidth !== 0)) {
+        return `RAID 10 requires a multiple of ${mirrorWidth} drives for ${mirrorWidth}-way mirrors.`;
+      }
       return '';
     }
 
+    // Performance calculation helpers
     function calcStripedMirrors(driveCount, width) {
-      if (driveCount < width || driveCount % width !== 0) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      if (driveCount < width || driveCount % width !== 0) {
+        return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      }
       const vdevs = Math.floor(driveCount / width);
       return { read: driveCount, write: vdevs, usable: vdevs, valid: true, vdevs };
     }
 
     function calcRaidZ(driveCount, parity) {
-      if (vdevWidth < parity + 1) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
-      if (driveCount < vdevWidth) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      if (vdevWidth < parity + 1 || driveCount < vdevWidth) {
+        return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      }
+      
       const vdevs = Math.floor(driveCount / vdevWidth);
       const leftover = driveCount % vdevWidth;
-      if (vdevs === 0) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      if (vdevs === 0) {
+        return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      }
       
       const dataPerVdev = (vdevWidth - parity);
       const usable = vdevs * dataPerVdev;
@@ -284,6 +308,7 @@
       return { read, write, usable, valid, vdevs };
     }
 
+    // Main performance calculation
     function calculatePerformance(driveCount, raidType) {
       switch (raidType) {
         case 'raid0': {
@@ -368,13 +393,18 @@
           }
           return { read, write, usable, valid: true };
         }
-        case 'raidz1': return calcRaidZ(driveCount, 1);
-        case 'raidz2': return calcRaidZ(driveCount, 2);
-        case 'raidz3': return calcRaidZ(driveCount, 3);
-        default: return { read:1, write:1, usable:1, valid:true };
+        case 'raidz1': 
+          return calcRaidZ(driveCount, 1);
+        case 'raidz2': 
+          return calcRaidZ(driveCount, 2);
+        case 'raidz3': 
+          return calcRaidZ(driveCount, 3);
+        default: 
+          return { read:1, write:1, usable:1, valid:true };
       }
     }
 
+    // Triangle scoring calculation
     function calculateTriangleScores(raidType, driveCount, perf) {
       if (!perf.valid) return { cheap: 0, fast: 0, reliable: 0 };
       
@@ -407,8 +437,11 @@
       return { cheap, fast, reliable };
     }
 
-    function calculateRebuildScore(raidType, driveCount, usableCapacity = 0) {
-      if (raidType === 'raid0') return { score: 'N/A', reason: 'No rebuild - restore from backup', timePerTB: null };
+    // Rebuild scoring calculation
+    function calculateRebuildScore(raidType, driveCount, usableCapacity) {
+      if (raidType === 'raid0') {
+        return { score: 'N/A', reason: 'No rebuild - restore from backup', timePerTB: null };
+      }
       
       const baseScores = {
         'mirror': 9, 'raid10': 10, 'raid5': 6, 'raid6': 4, 'raidz1': 8, 'raidz2': 7, 'raidz3': 6
@@ -431,8 +464,6 @@
       } else if (raidType === 'mirror') {
         const redundancyBonus = Math.min(2, (driveCount - 2) * 0.2);
         finalScore = Math.min(10, baseScore + redundancyBonus);
-      } else if (raidType === 'raid10') {
-        finalScore = baseScore;
       }
       
       if (usableCapacity > 0) {
@@ -477,6 +508,7 @@
       };
     }
 
+    // Configuration warnings
     function getConfigWarnings(raidType, driveCount, usableCapacity) {
       const warnings = [];
       
@@ -578,15 +610,126 @@
       return warnings;
     }
 
+    // Comparison mode functions
+    function getCurrentConfig() {
+      return {
+        driveCount: currentDriveCount,
+        raidType: currentRaidType,
+        driveSize: currentDriveSize,
+        mirrorWidth: mirrorWidth,
+        vdevWidth: vdevWidth,
+        workloadMode: workloadMode,
+        perfModel: perfModel
+      };
+    }
+
+    function applyConfig(config) {
+      currentDriveCount = config.driveCount;
+      currentRaidType = config.raidType;
+      currentDriveSize = config.driveSize;
+      mirrorWidth = config.mirrorWidth;
+      vdevWidth = config.vdevWidth;
+      workloadMode = config.workloadMode;
+      perfModel = config.perfModel;
+      
+      document.getElementById('drive-count').value = String(currentDriveCount);
+      document.getElementById('drive-size').value = String(currentDriveSize);
+      document.getElementById('mirror-width').value = String(mirrorWidth);
+      document.getElementById('vdev-width').value = String(vdevWidth);
+      document.getElementById('workload-mode').value = workloadMode;
+      document.getElementById('perf-model').value = perfModel;
+      
+      refreshVdevWidthOptions();
+      maybeAutoSetRaidZWidth();
+      updateRaidButtonsDisabledState();
+      switchTab(currentRaidType);
+    }
+
+    function startComparison() {
+      lockedConfig = getCurrentConfig();
+      comparisonMode = true;
+      render();
+    }
+
+    function swapConfigurations() {
+      if (!lockedConfig) return;
+      const temp = getCurrentConfig();
+      applyConfig(lockedConfig);
+      lockedConfig = temp;
+      render();
+    }
+
+    function clearComparison() {
+      lockedConfig = null;
+      comparisonMode = false;
+      render();
+    }
+
+    function renderComparisonCard(config, title, subtitle, isCurrent) {
+      const perf = calculatePerformance(config.driveCount, config.raidType);
+      const triangleScores = calculateTriangleScores(config.raidType, config.driveCount, perf);
+      const rebuildScore = calculateRebuildScore(config.raidType, config.driveCount, config.driveSize > 0 ? perf.usable * config.driveSize : 0);
+      
+      const cardClass = isCurrent ? 'comparison-card comparison-current' : 'comparison-card comparison-locked';
+      
+      return `
+        <div class="${cardClass}">
+          <div class="comparison-header">
+            <div>
+              <div class="comparison-title">${title}</div>
+              <div class="comparison-subtitle">${subtitle}</div>
+            </div>
+          </div>
+          <div class="comparison-triangle">
+            <div class="comparison-triangle-bar">
+              <div class="comparison-triangle-label">Cheap</div>
+              <div class="comparison-triangle-progress">
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.cheap}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+              </div>
+              <div class="comparison-triangle-value">${triangleScores.cheap.toFixed(0)}%</div>
+            </div>
+            <div class="comparison-triangle-bar">
+              <div class="comparison-triangle-label">Fast</div>
+              <div class="comparison-triangle-progress">
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.fast}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+              </div>
+              <div class="comparison-triangle-value">${triangleScores.fast.toFixed(0)}%</div>
+            </div>
+            <div class="comparison-triangle-bar">
+              <div class="comparison-triangle-label">Reliable</div>
+              <div class="comparison-triangle-progress">
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.reliable}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+              </div>
+              <div class="comparison-triangle-value">${triangleScores.reliable.toFixed(0)}%</div>
+            </div>
+          </div>
+          <div class="comparison-stats">
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Read Speed</div>
+              <div class="comparison-stat-value">${perf.read.toFixed(1)}×</div>
+            </div>
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Write Speed</div>
+              <div class="comparison-stat-value">${perf.write.toFixed(1)}×</div>
+            </div>
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Rebuild</div>
+              <div class="comparison-stat-value">${rebuildScore.score === 'N/A' ? 'N/A' : rebuildScore.score + '/10'}</div>
+            </div>
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Efficiency</div>
+              <div class="comparison-stat-value">${((perf.usable / config.driveCount) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Main explanation and display functions
     function getRaidExplanation(raidType) {
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
       const usableCapacity = currentDriveSize > 0 ? perf.usable * currentDriveSize : 0;
       const rebuildInfo = calculateRebuildScore(raidType, currentDriveCount, usableCapacity);
-      
-      const norm = Math.max(1, currentDriveCount);
-      const actualWriteScore = perf.valid ? Math.min(10, Math.max(1, Math.round((perf.write / norm) * 10))) : 1;
-      const getScoreInfo = (s)=> s>=8?{label:'Excellent',class:'score-excellent'}:s>=6?{label:'Good',class:'score-good'}:s>=4?{label:'Fair',class:'score-fair'}:{label:'Poor',class:'score-poor'};
-      const writeScoreInfo = getScoreInfo(actualWriteScore);
       
       const explanations = {
         'raid0': { title:'RAID 0 (Striping)', explanation:'Data is striped across all drives with no redundancy. Maximum performance and storage efficiency, but any drive failure destroys the entire array.', rebuild: rebuildInfo },
@@ -617,8 +760,10 @@
       const warn = document.getElementById('invalid-warning');
       const driveSel = document.getElementById('drive-count');
       if (!warn || !driveSel) return;
+      
       const msg = configError(currentRaidType, currentDriveCount);
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
+      
       if (msg || !perf.valid){
         const reason = msg ? msg : `${RAID_LABEL[currentRaidType]} not possible with ${currentDriveCount} drives (vdev/layout mismatch).`;
         warn.innerHTML = `<h5>Invalid configuration</h5><p>${reason}</p>`;
@@ -639,9 +784,10 @@
       
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
       const msg = configError(currentRaidType, currentDriveCount);
+      
       if (msg || !perf.valid){
         document.getElementById('scoring-section').innerHTML = `
-          <div class="inline-note" role="alert">
+          <div class="inline-note">
             <h5>Invalid configuration</h5>
             <p>${msg ? msg : `${RAID_LABEL[currentRaidType]} not possible with ${currentDriveCount} drives (vdev/layout mismatch).`}</p>
           </div>`;
@@ -650,13 +796,12 @@
 
       const usableCapacity = currentDriveSize > 0 ? perf.usable * currentDriveSize : 0;
       const warnings = getConfigWarnings(currentRaidType, currentDriveCount, usableCapacity);
+      const triangleScores = calculateTriangleScores(currentRaidType, currentDriveCount, perf);
       
       const norm = Math.max(1, currentDriveCount);
       const readScore = Math.min(10, Math.max(1, Math.round((perf.read / norm) * 10)));
       const writeScore = Math.min(10, Math.max(1, Math.round((perf.write / norm) * 10)));
       const scoreClass = (n) => n >= 8 ? 'score-excellent' : n >= 6 ? 'score-good' : n >= 4 ? 'score-fair' : 'score-poor';
-
-      const triangleScores = calculateTriangleScores(currentRaidType, currentDriveCount, perf);
       
       let warningsHtml = '';
       if (warnings.length > 0) {
@@ -678,22 +823,22 @@
           <div class="triangle-bars">
             <div class="triangle-bar">
               <div class="triangle-label">Cheap (Storage Efficiency)</div>
-              <div class="triangle-progress" aria-label="Storage efficiency progress bar">
-                <div class="triangle-fill" style="width: ${triangleScores.cheap}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);" aria-valuenow="${triangleScores.cheap}" aria-valuemin="0" aria-valuemax="100"></div>
+              <div class="triangle-progress">
+                <div class="triangle-fill" style="width: ${triangleScores.cheap}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
               </div>
               <div class="triangle-value">${triangleScores.cheap.toFixed(0)}%</div>
             </div>
             <div class="triangle-bar">
               <div class="triangle-label">Fast (Performance)</div>
-              <div class="triangle-progress" aria-label="Performance progress bar">
-                <div class="triangle-fill" style="width: ${triangleScores.fast}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);" aria-valuenow="${triangleScores.fast}" aria-valuemin="0" aria-valuemax="100"></div>
+              <div class="triangle-progress">
+                <div class="triangle-fill" style="width: ${triangleScores.fast}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
               </div>
               <div class="triangle-value">${triangleScores.fast.toFixed(0)}%</div>
             </div>
             <div class="triangle-bar">
               <div class="triangle-label">Reliable (Fault Tolerance)</div>
-              <div class="triangle-progress" aria-label="Reliability progress bar">
-                <div class="triangle-fill" style="width: ${triangleScores.reliable}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);" aria-valuenow="${triangleScores.reliable}" aria-valuemin="0" aria-valuemax="100"></div>
+              <div class="triangle-progress">
+                <div class="triangle-fill" style="width: ${triangleScores.reliable}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
               </div>
               <div class="triangle-value">${triangleScores.reliable.toFixed(0)}%</div>
             </div>
@@ -702,24 +847,55 @@
             Pick any two: You can't maximize all three simultaneously
           </p>
         </div>
+        <div class="comparison-controls">
+          ${!comparisonMode ? `<button class="comparison-btn" id="start-comparison-btn">Compare Configurations</button>` : `
+            <button class="comparison-btn" id="swap-comparison-btn">Swap</button>
+            <button class="comparison-btn danger" id="clear-comparison-btn">Clear</button>
+          `}
+        </div>
+        ${comparisonMode && lockedConfig ? `
+          <div class="comparison-section">
+            <div class="comparison-grid">
+              ${renderComparisonCard(getCurrentConfig(), 'Current Configuration', `${RAID_LABEL[currentRaidType]}, ${currentDriveCount} drives`, true)}
+              ${renderComparisonCard(lockedConfig, 'Locked Configuration', `${RAID_LABEL[lockedConfig.raidType]}, ${lockedConfig.driveCount} drives`, false)}
+            </div>
+          </div>
+        ` : ''}
         <div class="score-grid">
-          <div class="score-card" title="Relative sequential READ throughput vs a single drive, normalized by drive count.">
+          <div class="score-card">
             <h5>Read</h5>
             <div class="score-value ${scoreClass(readScore)}">${readScore}/10</div>
             <div class="score-description">${perf.read.toFixed(1)}× vs single drive</div>
           </div>
-          <div class="score-card" title="Relative sequential WRITE throughput vs a single drive, normalized by drive count.">
+          <div class="score-card">
             <h5>Write</h5>
             <div class="score-value ${scoreClass(writeScore)}">${writeScore}/10</div>
             <div class="score-description">${perf.write.toFixed(1)}× vs single drive (${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'})</div>
           </div>
-          <div class="score-card" title="Estimated ease/speed of rebuilds">
+          <div class="score-card">
             <h5>Rebuild</h5>
             <div class="score-value ${e.rebuild.class}">${e.rebuild.score === 'N/A' ? 'N/A' : e.rebuild.score + '/10'}</div>
             <div class="score-description">${e.rebuild.label}<br><em>${e.rebuild.reason}</em></div>
           </div>
         </div>`;
+      
       document.getElementById('scoring-section').innerHTML = scoringHtml;
+      
+      // Add event listeners for comparison buttons
+      const startBtn = document.getElementById('start-comparison-btn');
+      if (startBtn) {
+        startBtn.addEventListener('click', startComparison);
+      }
+      
+      const swapBtn = document.getElementById('swap-comparison-btn');
+      if (swapBtn) {
+        swapBtn.addEventListener('click', swapConfigurations);
+      }
+      
+      const clearBtn = document.getElementById('clear-comparison-btn');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', clearComparison);
+      }
     }
 
     function createChart() {
@@ -730,38 +906,72 @@
         }
         return;
       }
+      
       const ctx = document.getElementById('chart').getContext('2d');
       const driveCount = currentDriveCount;
       const perf = calculatePerformance(driveCount, currentRaidType);
+      
       if (chart) chart.destroy();
+      
       const msg = configError(currentRaidType, currentDriveCount);
       if (msg || !perf.valid) {
         chart = new Chart(ctx, {
           type: 'bar',
-          data: { labels: ['Invalid Configuration'], datasets: [{ label: 'Invalid', data: [0], backgroundColor: 'rgba(220,53,69,0.7)', borderColor: 'rgba(220,53,69,1)', borderWidth: 2 }] },
+          data: { 
+            labels: ['Invalid Configuration'], 
+            datasets: [{ 
+              label: 'Invalid', 
+              data: [0], 
+              backgroundColor: 'rgba(220,53,69,0.7)', 
+              borderColor: 'rgba(220,53,69,1)', 
+              borderWidth: 2 
+            }] 
+          },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { title: { display: true, text: msg || `${RAID_LABEL[currentRaidType]} not possible with ${driveCount} drives` }, legend: { labels: { color: '#333' } } },
-            scales: { y: { beginAtZero: true, ticks: { color: '#333' } }, x: { ticks: { color: '#333' } } }
+            plugins: { 
+              title: { display: true, text: msg || `${RAID_LABEL[currentRaidType]} not possible with ${driveCount} drives` }, 
+              legend: { labels: { color: '#333' } } 
+            },
+            scales: { 
+              y: { beginAtZero: true, ticks: { color: '#333' } }, 
+              x: { ticks: { color: '#333' } } 
+            }
           }
         });
         return;
       }
+      
       chart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: ['Single Drive', `${driveCount} Drives (${RAID_LABEL[currentRaidType]})`],
           datasets: [
-            { label: 'Read Speed (x faster)', data: [1, perf.read], backgroundColor: 'rgba(54, 162, 235, 0.7)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 2 },
-            { label: 'Write Speed (x faster)', data: [1, perf.write], backgroundColor: 'rgba(255, 99, 132, 0.7)', borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 2 }
+            { 
+              label: 'Read Speed (x faster)', 
+              data: [1, perf.read], 
+              backgroundColor: 'rgba(54, 162, 235, 0.7)', 
+              borderColor: 'rgba(54, 162, 235, 1)', 
+              borderWidth: 2 
+            },
+            { 
+              label: 'Write Speed (x faster)', 
+              data: [1, perf.write], 
+              backgroundColor: 'rgba(255, 99, 132, 0.7)', 
+              borderColor: 'rgba(255, 99, 132, 1)', 
+              borderWidth: 2 
+            }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            title: { display: true, text: `${RAID_LABEL[currentRaidType]} Performance with ${driveCount} Drives (${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'})` },
+            title: { 
+              display: true, 
+              text: `${RAID_LABEL[currentRaidType]} Performance with ${driveCount} Drives (${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'})` 
+            },
             legend: { display: true, position: 'top', labels: { color: '#333' } }
           },
           scales: {
@@ -776,55 +986,62 @@
       const storageDisplay = document.getElementById('storage-display');
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
       if (!storageDisplay) return;
+      
       if (!currentDriveSize || currentDriveSize <= 0) {
         storageDisplay.innerHTML = '<p style="text-align:center; color:#666; font-style:italic; margin:8px 0;">Select a drive size to see storage breakdown</p>';
         return;
       }
+      
       const msg = configError(currentRaidType, currentDriveCount);
       if (msg || !perf.valid) {
-        const danger = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#dc3545';
-        storageDisplay.innerHTML = `<p style="text-align:center; color:${danger}; font-style:italic;">${msg || `Invalid configuration for ${RAID_LABEL[currentRaidType]} with ${currentDriveCount} drives`}</p>`;
+        storageDisplay.innerHTML = `<p style="text-align:center; color:#dc3545; font-style:italic;">${msg || `Invalid configuration for ${RAID_LABEL[currentRaidType]} with ${currentDriveCount} drives`}</p>`;
         return;
       }
+      
       const useBinary = document.getElementById('binary-units').checked;
       const reserve10 = document.getElementById('reserve-10').checked;
       const unit = useBinary ? 'TiB' : 'TB';
       const factor = useBinary ? (1000/1024) : 1;
+      
       let total = currentDriveSize * currentDriveCount;
       let usableDrives = perf.usable;
       let usableRaid = usableDrives * currentDriveSize;
       let usableAfterReserve = reserve10 ? usableRaid * 0.9 : usableRaid;
+      
       total *= factor;
       usableRaid *= factor;
       usableAfterReserve *= factor;
+      
       const lostToRaid = Math.max(0, total - usableRaid);
       const lostToReserve = Math.max(0, usableRaid - usableAfterReserve);
       const raidEff = total > 0 ? ((usableRaid / total) * 100).toFixed(1) : '0.0';
+      
       storageDisplay.innerHTML = `
         <div class="storage-grid">
           <div class="storage-item storage-total">
-            <div class="storage-label" title="All drive capacity combined before any reductions.">Total Raw Space</div>
+            <div class="storage-label">Total Raw Space</div>
             <div class="storage-value">${total.toFixed(1)} ${unit}</div>
           </div>
           <div class="storage-item storage-usable">
-            <div class="storage-label" title="Space available after RAID overhead${reserve10 ? ' and 10% reserve' : ''}.">Available Space${reserve10 ? ' (with 10% reserve)' : ''}</div>
+            <div class="storage-label">Available Space${reserve10 ? ' (with 10% reserve)' : ''}</div>
             <div class="storage-value">${usableAfterReserve.toFixed(1)} ${unit}</div>
           </div>
           <div class="storage-item storage-lost">
-            <div class="storage-label" title="Space lost to redundancy${reserve10 ? ' plus operational reserve' : ''}.">Lost Space</div>
+            <div class="storage-label">Lost Space</div>
             <div class="storage-value">${(lostToRaid + lostToReserve).toFixed(1)} ${unit}</div>
           </div>
           <div class="storage-item">
-            <div class="storage-label" title="Usable after redundancy ÷ raw × 100%. Reserve not included.">RAID Efficiency</div>
+            <div class="storage-label">RAID Efficiency</div>
             <div class="storage-value">${raidEff}%</div>
           </div>
         </div>`;
     }
 
-    function updateRebuildNote(){
+    function updateRebuildNote() {
       const note = document.getElementById('rebuild-note');
       const noteText = document.getElementById('rebuild-note-text');
       if (!note || !noteText) return;
+      
       const e = getRaidExplanation(currentRaidType);
       if (e.rebuild.timePerTB && currentDriveSize > 0) {
         const useBinary = document.getElementById('binary-units').checked;
@@ -837,7 +1054,7 @@
       }
     }
 
-    function applyAdvancedVisibility(){
+    function applyAdvancedVisibility() {
       const advToggles = document.getElementById('advanced-toggles');
       const vdevWrap = document.getElementById('vdev-wrapper');
       const mirrorWrap = document.getElementById('mirror-wrapper');
@@ -845,6 +1062,7 @@
       const perfModelWrap = document.getElementById('perf-model-wrapper');
       const isRaidZ = currentRaidType && currentRaidType.startsWith('raidz');
       const isRaid10 = currentRaidType === 'raid10';
+      
       if (advToggles) advToggles.classList.toggle('hidden', !advancedMode);
       if (vdevWrap) vdevWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
       if (mirrorWrap) mirrorWrap.classList.toggle('hidden', !advancedMode || !isRaid10);
@@ -852,13 +1070,13 @@
       if (perfModelWrap) perfModelWrap.classList.toggle('hidden', !advancedMode);
     }
 
-    function pickDefaultRaidZWidth(driveCount, parity){
+    function pickDefaultRaidZWidth(driveCount, parity) {
       const preferred = [4,6,8,10,12,14,16,5,7,9,11,13,15];
       const candidate = preferred.filter(w => w <= driveCount && w >= (parity+1) && (driveCount % w === 0)).pop();
       return candidate || Math.max(parity+1, Math.min(driveCount, 16));
     }
 
-    function maybeAutoSetRaidZWidth(){
+    function maybeAutoSetRaidZWidth() {
       if (!currentRaidType.startsWith('raidz') || advancedMode) return;
       const parity = currentRaidType === 'raidz1' ? 1 : currentRaidType === 'raidz2' ? 2 : 3;
       const auto = pickDefaultRaidZWidth(currentDriveCount, parity);
@@ -867,9 +1085,9 @@
       if (sel) sel.value = String(vdevWidth);
     }
 
-    function updateRaidButtonsDisabledState(){
+    function updateRaidButtonsDisabledState() {
       const types = ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'];
-      types.forEach(t=>{
+      types.forEach(t => {
         const btn = document.getElementById(`${t}-btn`);
         if (!btn) return;
         const err = configError(t, currentDriveCount);
@@ -884,7 +1102,6 @@
       ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id => {
         const btn = document.getElementById(`${id}-btn`);
         btn.classList.toggle('active', id === type);
-        btn.setAttribute('aria-pressed', id === type ? 'true' : 'false');
       });
       refreshVdevWidthOptions();
       maybeAutoSetRaidZWidth();
@@ -892,13 +1109,17 @@
       render();
     }
 
-    function render(){
+    function render() {
       updateRaidExplanation();
       createChart();
       updateStorageInfo();
       updateRebuildNote();
       setInvalidWarning();
-      const state = { c: currentDriveCount, t: currentRaidType, s: currentDriveSize, mw: mirrorWidth, vw: vdevWidth, adv: advancedMode, wl: workloadMode, pm: perfModel };
+      const state = { 
+        c: currentDriveCount, t: currentRaidType, s: currentDriveSize, 
+        mw: mirrorWidth, vw: vdevWidth, adv: advancedMode, 
+        wl: workloadMode, pm: perfModel, comp: comparisonMode, locked: lockedConfig 
+      };
       try { localStorage.setItem('raidcalc', JSON.stringify(state)); } catch(e) {}
       applyAdvancedVisibility();
     }
@@ -934,28 +1155,35 @@
     }
 
     // Event listeners
-    document.getElementById('drive-count').addEventListener('change', (e)=>{
+    document.getElementById('drive-count').addEventListener('change', (e) => {
       currentDriveCount = parseInt(e.target.value,10);
       refreshVdevWidthOptions();
       maybeAutoSetRaidZWidth();
       updateRaidButtonsDisabledState();
       render();
     });
-    document.getElementById('drive-size').addEventListener('change', (e)=>{
-      currentDriveSize = parseFloat(e.target.value); render();
+
+    document.getElementById('drive-size').addEventListener('change', (e) => {
+      currentDriveSize = parseFloat(e.target.value); 
+      render();
     });
-    document.getElementById('mirror-width').addEventListener('change', (e)=>{
-      mirrorWidth = parseInt(e.target.value,10); render();
+
+    document.getElementById('mirror-width').addEventListener('change', (e) => {
+      mirrorWidth = parseInt(e.target.value,10); 
+      render();
     });
-    document.getElementById('vdev-width').addEventListener('change', (e)=>{
-      vdevWidth = parseInt(e.target.value,10); render();
+
+    document.getElementById('vdev-width').addEventListener('change', (e) => {
+      vdevWidth = parseInt(e.target.value,10); 
+      render();
     });
+
     document.getElementById('binary-units').addEventListener('change', render);
     document.getElementById('reserve-10').addEventListener('change', render);
     
     const advToggleEl = document.getElementById('advanced-toggle');
     if (advToggleEl) {
-      advToggleEl.addEventListener('change', (e)=>{
+      advToggleEl.addEventListener('change', (e) => {
         advancedMode = !!e.target.checked;
         applyAdvancedVisibility();
         render();
@@ -964,16 +1192,24 @@
     
     const workloadSel = document.getElementById('workload-mode');
     if (workloadSel) {
-      workloadSel.addEventListener('change', (e)=>{ workloadMode = e.target.value; render(); });
+      workloadSel.addEventListener('change', (e) => { 
+        workloadMode = e.target.value; 
+        render(); 
+      });
     }
     
     const perfModelSel = document.getElementById('perf-model');
     if (perfModelSel) {
-      perfModelSel.addEventListener('change', (e)=>{ perfModel = e.target.value; render(); });
+      perfModelSel.addEventListener('change', (e) => { 
+        perfModel = e.target.value; 
+        render(); 
+      });
     }
 
-    ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id=>{
-      document.getElementById(`${id}-btn`).addEventListener('click', ()=> { switchTab(id); });
+    ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id => {
+      document.getElementById(`${id}-btn`).addEventListener('click', () => { 
+        switchTab(id); 
+      });
     });
 
     // Initialize on load
@@ -988,7 +1224,10 @@
         if (typeof st.adv !== 'undefined') { advancedMode = !!st.adv; }
         if (st.wl) { workloadMode = st.wl; const sel = document.getElementById('workload-mode'); if (sel) sel.value = workloadMode; }
         if (st.pm) { perfModel = st.pm; const sel = document.getElementById('perf-model'); if (sel) sel.value = perfModel; }
+        if (typeof st.comp !== 'undefined') { comparisonMode = !!st.comp; }
+        if (st.locked) { lockedConfig = st.locked; }
       } catch(e) {}
+      
       document.getElementById('advanced-toggle').checked = advancedMode;
       applyAdvancedVisibility();
       refreshVdevWidthOptions();
