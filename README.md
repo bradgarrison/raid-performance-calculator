@@ -1,16 +1,47 @@
 # RAID Performance Calculator
 
-![Screenshot](raid-performance-calculator-screenshot.png)
+An interactive web-based tool to estimate **read/write performance, usable storage capacity, and fault tolerance** for common RAID and ZFS configurations.
 
-A simple and interactive tool to estimate RAID performance for various configurations.  
-Try it live: [GitHub Pages Link](https://bradgarrison.github.io/raid-performance-calculator/)
+Supports:
+- RAID 0, 1, 5, 6, 10
+- RAIDZ1, RAIDZ2, RAIDZ3 (ZFS)
+
+## 🚀 Live Demo
+[**View the Calculator**](https://bradgarrison.github.io/raid-performance-calculator/)
 
 ---
 
-## License & Usage
-This project is licensed under the MIT License — feel free to use, share, and modify it as you please.  
-A credit to the original author is appreciated but not required.  
+## ✨ Features
+- Calculates **read & write speed multipliers** based on drive count and RAID type
+- Estimates **usable capacity** after parity/reserve space
+- Fault tolerance overview for each configuration
+- Comparison chart for quick visual analysis
+- Supports HDD, SSD, and NVMe workloads (sequential vs. random)
+- MIT Licensed — free to use, share, and modify
 
-**Author:** Brad Garrison  
-📧 brad.garrison [at] jbtechconsulting [dot] com  
-🔗 [GitHub Repository](https://github.com/bradgarrison/raid-performance-calculator)
+---
+
+## 📸 Preview
+![RAID Performance Calculator Screenshot](og-image.png)
+
+---
+
+## 📖 How It Works
+Enter:
+1. Number of drives
+2. Drive size
+3. Drive type (HDD/SSD/NVMe)
+4. Workload type (Sequential or Random)
+
+The calculator then estimates:
+- **Read speed multiplier**
+- **Write speed multiplier**
+- **Total usable storage**
+- **Fault tolerance** (drives that can fail without data loss)
+
+---
+
+## ⚡ Installation (Local Copy)
+Clone the repository:
+```bash
+git clone https://github.com/bradgarrison/raid-performance-calculator.git
