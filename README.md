@@ -30,8 +30,7 @@ Supports:
 Enter:
 1. Number of drives
 2. Drive size
-3. Drive type (HDD/SSD/NVMe)
-4. Workload type (Sequential or Random)
+3. Workload type (Sequential or Random)
 
 The calculator then estimates:
 - **Read speed multiplier**
