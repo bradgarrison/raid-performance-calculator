@@ -1,28 +1,43 @@
-<!-- 
+<!--
 RAID Performance Calculator
 Author: Brad Garrison
 Email: brad.garrison@jbtechconsulting.com
 GitHub: https://github.com/bradgarrison/raid-performance-calculator
 
 License: MIT
-
-License & Usage:
-This project is licensed under the MIT License — you are free to use, share, and modify it as you wish. 
+Usage: This project is licensed under the MIT License — you are free to use, share, and modify it as you wish.
 Attribution to the original author is appreciated but not required.
 -->
 <!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RAID Performance Calculator</title>
-  <meta name="description" content="Interactive RAID Performance Calculator — Compare read/write speeds, storage capacity, and redundancy for RAID levels.">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-  ...
-</head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RAID Performance Calculator (Improved)</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+  <!-- SEO -->
+  <meta name="description" content="Free RAID performance calculator. Compare RAID 0, 1, 5, 6, 10, RAIDZ1, RAIDZ2, RAIDZ3 configurations with speed, capacity, cost, and fault tolerance estimates." />
+  <meta name="keywords" content="RAID calculator, RAID performance, RAID speed, RAID capacity, RAID fault tolerance, RAID 0, RAID 1, RAID 5, RAID 6, RAID 10, RAIDZ1, RAIDZ2, RAIDZ3, storage calculator, NAS, ZFS" />
+  <meta name="author" content="Brad Garrison" />
+  <link rel="canonical" href="https://bradgarrison.github.io/raid-performance-calculator/" />
+
+  <!-- Open Graph (Facebook/LinkedIn) -->
+  <meta property="og:title" content="RAID Performance Calculator" />
+  <meta property="og:description" content="Interactive RAID Performance Calculator — compare read/write speeds, storage capacity, and redundancy for RAID levels." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://bradgarrison.github.io/raid-performance-calculator/" />
+  <meta property="og:image" content="https://bradgarrison.github.io/raid-performance-calculator/og-image.png" />
+  <meta property="og:image:alt" content="Screenshot of the RAID Performance Calculator UI" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="RAID Performance Calculator" />
+  <meta name="twitter:description" content="Interactive RAID Performance Calculator — compare read/write speeds, storage capacity, and redundancy for RAID levels." />
+  <meta name="twitter:image" content="https://bradgarrison.github.io/raid-performance-calculator/og-image.png" />
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" defer></script>
+
   <style>
     :root { --bg1:#667eea; --bg2:#764ba2; --text:#333; --muted:#666; --primary:#007bff; --danger:#dc3545; }
     * { box-sizing: border-box; }
