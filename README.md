@@ -22,7 +22,7 @@ Supports:
 ---
 
 ## 📸 Preview
-![RAID Performance Calculator Screenshot](og-image.png)
+![RAID Performance Calculator Screenshot](raid-performance-calculator-screenshot.png)
 
 ---
 
