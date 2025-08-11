@@ -277,6 +277,8 @@
       <h5>Rebuild time (estimate)</h5>
       <p id="rebuild-note-text"></p>
     </div>
+    <div id="comparison-section"></div>
+    <div id="optimizer-section"></div>
   </div>
   <script>
     // Global state variables
@@ -1168,27 +1170,6 @@
             Pick any two: You can't maximize all three simultaneously
           </p>
         </div>
-        <div class="comparison-controls">
-          ${!comparisonMode ? `<button class="comparison-btn" id="start-comparison-btn">Compare Configurations</button>` : `
-            <button class="comparison-btn" id="swap-comparison-btn">Swap</button>
-            <button class="comparison-btn danger" id="clear-comparison-btn">Clear</button>
-          `}
-        </div>
-        ${comparisonMode && lockedConfig ? `
-          <div class="comparison-section">
-            <div class="comparison-grid">
-              ${renderComparisonCard(getCurrentConfig(), 'Current Configuration', `${RAID_LABEL[currentRaidType]}, ${currentDriveCount} drives`, true)}
-              ${renderComparisonCard(lockedConfig, 'Locked Configuration', `${RAID_LABEL[lockedConfig.raidType]}, ${lockedConfig.driveCount} drives`, false)}
-            </div>
-          </div>
-        ` : ''}
-        ${renderOptimizerSection()}
-        ${slogEnabled && currentRaidType.startsWith('raidz') ? `
-          <div class="inline-note">
-            <h5>SLOG Device Sizing</h5>
-            <p>For ${systemRam}GB RAM with ${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'} workload: <strong>${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended</strong> (range: ${calculateSlogSize(systemRam, workloadMode).min}-${calculateSlogSize(systemRam, workloadMode).max}GB). Use mirrored NVMe SSDs for redundancy.</p>
-          </div>
-        ` : ''}
         <div class="score-grid">
           <div class="score-card">
             <h5>Read</h5>
@@ -1205,7 +1186,17 @@
             <div class="score-value ${e.rebuild.class}">${e.rebuild.score === 'N/A' ? 'N/A' : e.rebuild.score + '/10'}</div>
             <div class="score-description">${e.rebuild.label}<br><em>${e.rebuild.reason}</em></div>
           </div>
-        </div>`;
+        </div>
+        <div class="comparison-controls">
+          ${!comparisonMode ? `<button class="comparison-btn" id="start-comparison-btn">Compare Configurations</button>` : ``}
+        </div>
+        ${slogEnabled && currentRaidType.startsWith('raidz') ? `
+          <div class="inline-note">
+            <h5>SLOG Device Sizing</h5>
+            <p>For ${systemRam}GB RAM with ${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'} workload: <strong>${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended</strong> (range: ${calculateSlogSize(systemRam, workloadMode).min}-${calculateSlogSize(systemRam, workloadMode).max}GB). Use mirrored NVMe SSDs for redundancy.</p>
+          </div>
+        ` : ''}
+        `;
       
       document.getElementById('scoring-section').innerHTML = scoringHtml;
       
@@ -1443,6 +1434,43 @@
       createChart();
       updateStorageInfo();
       updateRebuildNote();
+      
+      // Update comparison section after basic performance info
+      const comparisonContainer = document.getElementById('comparison-section');
+      if (comparisonContainer) {
+        const comparisonHtml = comparisonMode && lockedConfig ? `
+          <div class="comparison-section">
+            <div class="comparison-grid">
+              ${renderComparisonCard(getCurrentConfig(), 'Current Configuration', `${RAID_LABEL[currentRaidType]}, ${currentDriveCount} drives`, true)}
+              ${renderComparisonCard(lockedConfig, 'Locked Configuration', `${RAID_LABEL[lockedConfig.raidType]}, ${lockedConfig.driveCount} drives`, false)}
+            </div>
+            <div class="comparison-controls">
+              <button class="comparison-btn" id="swap-comparison-btn">Swap</button>
+              <button class="comparison-btn danger" id="clear-comparison-btn">Clear</button>
+            </div>
+          </div>
+        ` : '';
+        
+        comparisonContainer.innerHTML = comparisonHtml;
+      }
+      
+      // Add event listeners for comparison buttons in the new location
+      const swapBtn = document.getElementById('swap-comparison-btn');
+      if (swapBtn) {
+        swapBtn.addEventListener('click', swapConfigurations);
+      }
+      
+      const clearBtn = document.getElementById('clear-comparison-btn');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', clearComparison);
+      }
+      
+      // Update optimizer section separately
+      const optimizerContainer = document.getElementById('optimizer-section');
+      if (optimizerContainer) {
+        optimizerContainer.innerHTML = renderOptimizerSection();
+      }
+      
       setInvalidWarning();
       const state = { 
         c: currentDriveCount, t: currentRaidType, s: currentDriveSize, 
