@@ -179,10 +179,22 @@
           <option value="realistic">Real-World</option>
         </select>
       </div>
+      <div class="drive-selector" id="ram-wrapper">
+        <label for="system-ram">System RAM:</label>
+        <select id="system-ram">
+          <option value="8">8 GB</option>
+          <option value="16">16 GB</option>
+          <option value="32" selected>32 GB</option>
+          <option value="64">64 GB</option>
+          <option value="128">128 GB</option>
+          <option value="256">256 GB</option>
+        </select>
+      </div>
     </div>
     <div class="toggles" id="advanced-toggles">
       <label><input type="checkbox" id="binary-units"> Use TiB (binary)</label>
       <label><input type="checkbox" id="reserve-10"> Reserve 10% free space</label>
+      <label id="slog-wrapper"><input type="checkbox" id="slog-device"> Add SLOG device</label>
     </div>
     <div class="tab-buttons">
       <button class="tab-btn active" id="mirror-btn">RAID 1</button>
@@ -216,7 +228,6 @@
       <p id="rebuild-note-text"></p>
     </div>
   </div>
-
   <script>
     // Global state variables
     let chart = null;
@@ -228,9 +239,10 @@
     let advancedMode = false;
     let workloadMode = 'seq';
     let perfModel = 'theoretical';
+    let slogEnabled = false;
+    let systemRam = 32;
     let comparisonMode = false;
     let lockedConfig = null;
-
     // Constants
     const RAID_LABEL = { 
       mirror:'RAID 1', raid0:'RAID 0', raid10:'RAID 10', 
@@ -241,12 +253,28 @@
       raid0:2, mirror:2, raid10:4, raid5:3, 
       raid6:4, raidz1:3, raidz2:4, raidz3:5 
     };
-
     // Initialize Chart.js
     const hasChart = typeof window.Chart !== 'undefined';
     if (hasChart) { Chart.defaults.color = '#333'; }
-
-    // Configuration validation
+    // SLOG sizing calculation
+    function calculateSlogSize(ramGB, workload) {
+      const multipliers = {
+        'seq': 2,     // File server
+        'rand': 5,    // Database  
+        'vm': 6,      // VM host
+        'video': 2    // Video editing
+      };
+      
+      const recommended = ramGB * multipliers[workload];
+      const min = Math.max(8, ramGB * 2); // Minimum 2x RAM, but at least 8GB
+      const max = Math.min(256, ramGB * 8); // Maximum 8x RAM, but cap at 256GB
+      
+      return {
+        recommended: Math.min(256, Math.max(min, recommended)),
+        min: min,
+        max: max
+      };
+    }
     function configError(raidType, driveCount) {
       const min = MIN_DRIVES[raidType] || 1;
       if (driveCount < min) {
@@ -257,7 +285,6 @@
       }
       return '';
     }
-
     // Performance calculation helpers
     function calcStripedMirrors(driveCount, width) {
       if (driveCount < width || driveCount % width !== 0) {
@@ -266,7 +293,6 @@
       const vdevs = Math.floor(driveCount / width);
       return { read: driveCount, write: vdevs, usable: vdevs, valid: true, vdevs };
     }
-
     function calcRaidZ(driveCount, parity) {
       if (vdevWidth < parity + 1 || driveCount < vdevWidth) {
         return { read:0, write:0, usable:0, valid:false, vdevs:0 };
@@ -297,9 +323,9 @@
       if (workloadMode === 'seq' || workloadMode === 'video') {
         write = writeSeq;
       } else if (workloadMode === 'rand') {
-        write = writeRand;
+        write = slogEnabled ? vdevs * dataPerVdev * 0.8 : writeRand;
       } else if (workloadMode === 'vm') {
-        write = writeMixed;
+        write = slogEnabled ? vdevs * dataPerVdev * 0.8 : writeMixed;
       } else {
         write = writeSeq;
       }
@@ -307,7 +333,6 @@
       const valid = leftover === 0;
       return { read, write, usable, valid, vdevs };
     }
-
     // Main performance calculation
     function calculatePerformance(driveCount, raidType) {
       switch (raidType) {
@@ -403,7 +428,6 @@
           return { read:1, write:1, usable:1, valid:true };
       }
     }
-
     // Triangle scoring calculation
     function calculateTriangleScores(raidType, driveCount, perf) {
       if (!perf.valid) return { cheap: 0, fast: 0, reliable: 0 };
@@ -436,7 +460,6 @@
       
       return { cheap, fast, reliable };
     }
-
     // Rebuild scoring calculation
     function calculateRebuildScore(raidType, driveCount, usableCapacity) {
       if (raidType === 'raid0') {
@@ -507,7 +530,6 @@
         timePerTB: timePerTB[raidType] || 4
       };
     }
-
     // Configuration warnings
     function getConfigWarnings(raidType, driveCount, usableCapacity) {
       const warnings = [];
@@ -609,7 +631,6 @@
       
       return warnings;
     }
-
     // Comparison mode functions
     function getCurrentConfig() {
       return {
@@ -619,10 +640,11 @@
         mirrorWidth: mirrorWidth,
         vdevWidth: vdevWidth,
         workloadMode: workloadMode,
-        perfModel: perfModel
+        perfModel: perfModel,
+        slogEnabled: slogEnabled,
+        systemRam: systemRam
       };
     }
-
     function applyConfig(config) {
       currentDriveCount = config.driveCount;
       currentRaidType = config.raidType;
@@ -631,6 +653,8 @@
       vdevWidth = config.vdevWidth;
       workloadMode = config.workloadMode;
       perfModel = config.perfModel;
+      slogEnabled = config.slogEnabled || false;
+      systemRam = config.systemRam || 32;
       
       document.getElementById('drive-count').value = String(currentDriveCount);
       document.getElementById('drive-size').value = String(currentDriveSize);
@@ -638,19 +662,19 @@
       document.getElementById('vdev-width').value = String(vdevWidth);
       document.getElementById('workload-mode').value = workloadMode;
       document.getElementById('perf-model').value = perfModel;
+      document.getElementById('slog-device').checked = slogEnabled;
+      document.getElementById('system-ram').value = String(systemRam);
       
       refreshVdevWidthOptions();
       maybeAutoSetRaidZWidth();
       updateRaidButtonsDisabledState();
       switchTab(currentRaidType);
     }
-
     function startComparison() {
       lockedConfig = getCurrentConfig();
       comparisonMode = true;
       render();
     }
-
     function swapConfigurations() {
       if (!lockedConfig) return;
       const temp = getCurrentConfig();
@@ -658,13 +682,11 @@
       lockedConfig = temp;
       render();
     }
-
     function clearComparison() {
       lockedConfig = null;
       comparisonMode = false;
       render();
     }
-
     function renderComparisonCard(config, title, subtitle, isCurrent) {
       const perf = calculatePerformance(config.driveCount, config.raidType);
       const triangleScores = calculateTriangleScores(config.raidType, config.driveCount, perf);
@@ -724,7 +746,6 @@
         </div>
       `;
     }
-
     // Main explanation and display functions
     function getRaidExplanation(raidType) {
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
@@ -737,13 +758,12 @@
         'raid10': { title:'RAID 10 (Stripe of Mirrors)', explanation:`Mirrors striped together. ${mirrorWidth === 2 ? 'Traditional 2-way mirrors' : mirrorWidth === 3 ? '3-way mirrors for extra redundancy' : `${mirrorWidth}-way mirrors`} with excellent performance.`, rebuild: rebuildInfo },
         'raid5': { title:'RAID 5 (Single Parity)', explanation:'Distributes data and single parity across drives. Survives one failure; efficiency of N-1.', rebuild: rebuildInfo },
         'raid6': { title:'RAID 6 (Double Parity)', explanation:'Like RAID 5 but two parity blocks. Survives two failures; higher write penalty.', rebuild: rebuildInfo },
-        'raidz1': { title:'RAIDZ1 (ZFS Single Parity)', explanation:'ZFS single parity with COW and checksums. Modeled as multiple equal-width vdevs.', rebuild: rebuildInfo },
-        'raidz2': { title:'RAIDZ2 (ZFS Double Parity)', explanation:'ZFS double parity. Common sweet spot for capacity pools; modeled as multiple equal-width vdevs.', rebuild: rebuildInfo },
-        'raidz3': { title:'RAIDZ3 (ZFS Triple Parity)', explanation:'ZFS triple parity for very large arrays. Modeled as multiple equal-width vdevs.', rebuild: rebuildInfo }
+        'raidz1': { title:'RAIDZ1 (ZFS Single Parity)', explanation:`ZFS single parity with COW and checksums. Modeled as multiple equal-width vdevs.${slogEnabled ? ` SLOG device (${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended) accelerates sync writes for databases/VMs.` : ''}`, rebuild: rebuildInfo },
+        'raidz2': { title:'RAIDZ2 (ZFS Double Parity)', explanation:`ZFS double parity. Common sweet spot for capacity pools; modeled as multiple equal-width vdevs.${slogEnabled ? ` SLOG device (${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended) accelerates sync writes for databases/VMs.` : ''}`, rebuild: rebuildInfo },
+        'raidz3': { title:'RAIDZ3 (ZFS Triple Parity)', explanation:`ZFS triple parity for very large arrays. Modeled as multiple equal-width vdevs.${slogEnabled ? ` SLOG device (${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended) accelerates sync writes for databases/VMs.` : ''}`, rebuild: rebuildInfo }
       };
       return explanations[raidType] || explanations['mirror'];
     }
-
     function failureTolerance(raidType) {
       if (raidType === 'raid0') return 'Tolerates 0 drive failures.';
       if (raidType === 'mirror') return `Tolerates up to ${Math.max(0, currentDriveCount - 1)} drive failures (as long as one drive remains).`;
@@ -755,7 +775,6 @@
       if (raidType === 'raidz3') return 'Tolerates 3 drive failures across the pool (per vdev).';
       return '';
     }
-
     function setInvalidWarning() {
       const warn = document.getElementById('invalid-warning');
       const driveSel = document.getElementById('drive-count');
@@ -775,7 +794,6 @@
         driveSel.classList.remove('error');
       }
     }
-
     function updateRaidExplanation() {
       const e = getRaidExplanation(currentRaidType);
       document.getElementById('explanation-title').textContent = e.title;
@@ -793,7 +811,6 @@
           </div>`;
         return;
       }
-
       const usableCapacity = currentDriveSize > 0 ? perf.usable * currentDriveSize : 0;
       const warnings = getConfigWarnings(currentRaidType, currentDriveCount, usableCapacity);
       const triangleScores = calculateTriangleScores(currentRaidType, currentDriveCount, perf);
@@ -861,6 +878,12 @@
             </div>
           </div>
         ` : ''}
+        ${slogEnabled && currentRaidType.startsWith('raidz') ? `
+          <div class="inline-note">
+            <h5>SLOG Device Sizing</h5>
+            <p>For ${systemRam}GB RAM with ${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'} workload: <strong>${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended</strong> (range: ${calculateSlogSize(systemRam, workloadMode).min}-${calculateSlogSize(systemRam, workloadMode).max}GB). Use mirrored NVMe SSDs for redundancy.</p>
+          </div>
+        ` : ''}
         <div class="score-grid">
           <div class="score-card">
             <h5>Read</h5>
@@ -897,7 +920,6 @@
         clearBtn.addEventListener('click', clearComparison);
       }
     }
-
     function createChart() {
       if (!hasChart) {
         const container = document.querySelector('.chart-container');
@@ -981,7 +1003,6 @@
         }
       });
     }
-
     function updateStorageInfo() {
       const storageDisplay = document.getElementById('storage-display');
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
@@ -1036,7 +1057,6 @@
           </div>
         </div>`;
     }
-
     function updateRebuildNote() {
       const note = document.getElementById('rebuild-note');
       const noteText = document.getElementById('rebuild-note-text');
@@ -1047,19 +1067,17 @@
         const useBinary = document.getElementById('binary-units').checked;
         const estimatedHours = (currentDriveSize * e.rebuild.timePerTB).toFixed(1);
         note.classList.remove('hidden');
-        noteText.textContent = `~${estimatedHours} hours to rebuild one failed ${currentDriveSize}${useBinary ? ' TiB' : ' TB'} drive.`;
-      } else {
-        note.classList.add('hidden');
         noteText.textContent = '';
       }
     }
-
     function applyAdvancedVisibility() {
       const advToggles = document.getElementById('advanced-toggles');
       const vdevWrap = document.getElementById('vdev-wrapper');
       const mirrorWrap = document.getElementById('mirror-wrapper');
       const workloadWrap = document.getElementById('workload-wrapper');
       const perfModelWrap = document.getElementById('perf-model-wrapper');
+      const ramWrap = document.getElementById('ram-wrapper');
+      const slogWrap = document.getElementById('slog-wrapper');
       const isRaidZ = currentRaidType && currentRaidType.startsWith('raidz');
       const isRaid10 = currentRaidType === 'raid10';
       
@@ -1068,14 +1086,14 @@
       if (mirrorWrap) mirrorWrap.classList.toggle('hidden', !advancedMode || !isRaid10);
       if (workloadWrap) workloadWrap.classList.toggle('hidden', !advancedMode);
       if (perfModelWrap) perfModelWrap.classList.toggle('hidden', !advancedMode);
+      if (ramWrap) ramWrap.classList.toggle('hidden', !advancedMode);
+      if (slogWrap) slogWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
     }
-
     function pickDefaultRaidZWidth(driveCount, parity) {
       const preferred = [4,6,8,10,12,14,16,5,7,9,11,13,15];
       const candidate = preferred.filter(w => w <= driveCount && w >= (parity+1) && (driveCount % w === 0)).pop();
       return candidate || Math.max(parity+1, Math.min(driveCount, 16));
     }
-
     function maybeAutoSetRaidZWidth() {
       if (!currentRaidType.startsWith('raidz') || advancedMode) return;
       const parity = currentRaidType === 'raidz1' ? 1 : currentRaidType === 'raidz2' ? 2 : 3;
@@ -1084,7 +1102,6 @@
       const sel = document.getElementById('vdev-width');
       if (sel) sel.value = String(vdevWidth);
     }
-
     function updateRaidButtonsDisabledState() {
       const types = ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'];
       types.forEach(t => {
@@ -1096,7 +1113,6 @@
         btn.title = err ? err : RAID_LABEL[t];
       });
     }
-
     function switchTab(type) {
       currentRaidType = type;
       ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id => {
@@ -1108,7 +1124,6 @@
       applyAdvancedVisibility();
       render();
     }
-
     function render() {
       updateRaidExplanation();
       createChart();
@@ -1118,12 +1133,11 @@
       const state = { 
         c: currentDriveCount, t: currentRaidType, s: currentDriveSize, 
         mw: mirrorWidth, vw: vdevWidth, adv: advancedMode, 
-        wl: workloadMode, pm: perfModel, comp: comparisonMode, locked: lockedConfig 
+        wl: workloadMode, pm: perfModel, slog: slogEnabled, ram: systemRam, comp: comparisonMode, locked: lockedConfig 
       };
       try { localStorage.setItem('raidcalc', JSON.stringify(state)); } catch(e) {}
       applyAdvancedVisibility();
     }
-
     function refreshVdevWidthOptions() {
       const sel = document.getElementById('vdev-width');
       const was = vdevWidth;
@@ -1153,7 +1167,6 @@
         if (sel) sel.value = String(vdevWidth);
       }
     }
-
     // Event listeners
     document.getElementById('drive-count').addEventListener('change', (e) => {
       currentDriveCount = parseInt(e.target.value,10);
@@ -1162,24 +1175,29 @@
       updateRaidButtonsDisabledState();
       render();
     });
-
     document.getElementById('drive-size').addEventListener('change', (e) => {
       currentDriveSize = parseFloat(e.target.value); 
       render();
     });
-
     document.getElementById('mirror-width').addEventListener('change', (e) => {
       mirrorWidth = parseInt(e.target.value,10); 
       render();
     });
-
     document.getElementById('vdev-width').addEventListener('change', (e) => {
       vdevWidth = parseInt(e.target.value,10); 
       render();
     });
-
     document.getElementById('binary-units').addEventListener('change', render);
     document.getElementById('reserve-10').addEventListener('change', render);
+    document.getElementById('slog-device').addEventListener('change', (e) => {
+      slogEnabled = !!e.target.checked;
+      render();
+    });
+    
+    document.getElementById('system-ram').addEventListener('change', (e) => {
+      systemRam = parseInt(e.target.value, 10);
+      render();
+    });
     
     const advToggleEl = document.getElementById('advanced-toggle');
     if (advToggleEl) {
@@ -1205,13 +1223,11 @@
         render(); 
       });
     }
-
     ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id => {
       document.getElementById(`${id}-btn`).addEventListener('click', () => { 
         switchTab(id); 
       });
     });
-
     // Initialize on load
     document.addEventListener('DOMContentLoaded', () => {
       try {
@@ -1224,6 +1240,8 @@
         if (typeof st.adv !== 'undefined') { advancedMode = !!st.adv; }
         if (st.wl) { workloadMode = st.wl; const sel = document.getElementById('workload-mode'); if (sel) sel.value = workloadMode; }
         if (st.pm) { perfModel = st.pm; const sel = document.getElementById('perf-model'); if (sel) sel.value = perfModel; }
+        if (typeof st.slog !== 'undefined') { slogEnabled = !!st.slog; document.getElementById('slog-device').checked = slogEnabled; }
+        if (st.ram) { systemRam = st.ram; document.getElementById('system-ram').value = String(st.ram); }
         if (typeof st.comp !== 'undefined') { comparisonMode = !!st.comp; }
         if (st.locked) { lockedConfig = st.locked; }
       } catch(e) {}
@@ -1237,4 +1255,7 @@
     });
   </script>
 </body>
-</html>
+</html> `~${estimatedHours} hours to rebuild one failed ${currentDriveSize}${useBinary ? ' TiB' : ' TB'} drive.`;
+      } else {
+        note.classList.add('hidden');
+        noteText.textContent =
