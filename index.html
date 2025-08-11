@@ -79,6 +79,28 @@
     .comparison-stat { text-align: center; padding: 8px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; }
     .comparison-stat-label { font-size: 0.7em; color: #666; text-transform: uppercase; margin-bottom: 2px; }
     .comparison-stat-value { font-weight: 600; color: #333; }
+    .optimizer-section { margin: 16px 0; padding: 16px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; }
+    .optimizer-title { color: #333; margin: 0 0 12px; font-size: 1.1em; font-weight: 600; }
+    .optimizer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 12px 0; }
+    .optimizer-card { background: #fff; border: 2px solid #e0e0e0; border-radius: 8px; padding: 14px; position: relative; }
+    .optimizer-card.recommended { border-color: #28a745; background: #f8fff9; }
+    .optimizer-card.recommended::before { content: "⭐ RECOMMENDED"; position: absolute; top: -1px; right: -1px; background: #28a745; color: white; padding: 4px 8px; border-radius: 0 8px 0 8px; font-size: 0.7em; font-weight: 600; }
+    .optimizer-header { margin-bottom: 10px; }
+    .optimizer-layout-title { font-weight: 600; color: #333; margin-bottom: 4px; }
+    .optimizer-layout-subtitle { font-size: 0.85em; color: #666; }
+    .optimizer-triangle { margin: 8px 0; }
+    .optimizer-triangle-bar { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+    .optimizer-triangle-label { flex: 0 0 60px; font-size: 0.75em; font-weight: 600; }
+    .optimizer-triangle-progress { flex: 1; height: 12px; background: #e9ecef; border-radius: 6px; overflow: hidden; }
+    .optimizer-triangle-fill { height: 100%; border-radius: 6px; }
+    .optimizer-triangle-value { flex: 0 0 30px; text-align: right; font-weight: 600; font-size: 0.75em; }
+    .optimizer-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .optimizer-stat { text-align: center; padding: 6px; background: #f8f9fa; border-radius: 4px; border: 1px solid #e9ecef; }
+    .optimizer-stat-label { font-size: 0.65em; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+    .optimizer-stat-value { font-weight: 600; color: #333; font-size: 0.8em; }
+    .optimizer-pros-cons { margin-top: 8px; font-size: 0.8em; }
+    .optimizer-pros { color: #28a745; margin-bottom: 4px; }
+    .optimizer-cons { color: #dc3545; }
     .comparison-controls { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
     .comparison-btn { padding: 8px 16px; border: 1px solid #007bff; border-radius: 6px; background: #fff; color: #007bff; cursor: pointer; font-size: 0.9em; transition: all 0.2s; }
     .comparison-btn:hover { background: #007bff; color: #fff; }
@@ -209,6 +231,14 @@
           <option value="2048">2 TB</option>
         </select>
       </div>
+      <div class="drive-selector" id="optimizer-priority-wrapper">
+        <label for="optimizer-priority">Layout Priority:</label>
+        <select id="optimizer-priority">
+          <option value="balanced" selected>Balanced</option>
+          <option value="performance">Performance Focus</option>
+          <option value="rebuild">Rebuild Speed</option>
+        </select>
+      </div>
     </div>
     <div class="toggles" id="advanced-toggles">
       <label><input type="checkbox" id="binary-units"> Use TiB (binary)</label>
@@ -264,6 +294,7 @@
     let l2arcSize = 'auto';
     let l2arcCustomSize = 256;
     let specialVdevEnabled = false;
+    let optimizerPriority = 'balanced';
     let comparisonMode = false;
     let lockedConfig = null;
     // Constants
@@ -331,18 +362,20 @@
       const vdevs = Math.floor(driveCount / width);
       return { read: driveCount, write: vdevs, usable: vdevs, valid: true, vdevs };
     }
-    function calcRaidZ(driveCount, parity) {
-      if (vdevWidth < parity + 1 || driveCount < vdevWidth) {
+    function calcRaidZ(driveCount, parity, customVdevWidth = null) {
+      const useVdevWidth = customVdevWidth || vdevWidth;
+      
+      if (useVdevWidth < parity + 1 || driveCount < useVdevWidth) {
         return { read:0, write:0, usable:0, valid:false, vdevs:0 };
       }
       
-      const vdevs = Math.floor(driveCount / vdevWidth);
-      const leftover = driveCount % vdevWidth;
+      const vdevs = Math.floor(driveCount / useVdevWidth);
+      const leftover = driveCount % useVdevWidth;
       if (vdevs === 0) {
         return { read:0, write:0, usable:0, valid:false, vdevs:0 };
       }
       
-      const dataPerVdev = (vdevWidth - parity);
+      const dataPerVdev = (useVdevWidth - parity);
       const usable = vdevs * dataPerVdev;
       const read = vdevs * dataPerVdev;
       const penalty = 2 * (parity + 1);
@@ -370,6 +403,354 @@
       
       const valid = leftover === 0;
       return { read, write, usable, valid, vdevs };
+    }
+    
+    // Advanced Pool Layout Optimizer functions
+    function generateLayoutOptions(driveCount, raidType) {
+      if (!raidType.startsWith('raidz') && raidType !== 'raid10') {
+        return [];
+      }
+      
+      const options = [];
+      
+      if (raidType.startsWith('raidz')) {
+        const parity = raidType === 'raidz1' ? 1 : raidType === 'raidz2' ? 2 : 3;
+        const minVdevWidth = parity + 1;
+        const maxVdevWidth = Math.min(driveCount, 16);
+        
+        // Generate all valid divisor combinations
+        for (let vdevWidth = minVdevWidth; vdevWidth <= maxVdevWidth; vdevWidth++) {
+          if (driveCount % vdevWidth === 0) {
+            const vdevCount = driveCount / vdevWidth;
+            const dataPerVdev = vdevWidth - parity;
+            const totalUsable = vdevCount * dataPerVdev;
+            const efficiency = (totalUsable / driveCount) * 100;
+            
+            // Calculate performance for this layout
+            const tempVdevWidth = vdevWidth;
+            const tempPerf = calcRaidZ(driveCount, parity, tempVdevWidth);
+            
+            options.push({
+              vdevCount: vdevCount,
+              vdevWidth: vdevWidth,
+              raidType: raidType,
+              driveCount: driveCount,
+              usable: totalUsable,
+              efficiency: efficiency,
+              performance: tempPerf,
+              description: `${vdevCount}× ${vdevWidth}-drive ${raidType.toUpperCase()}`
+            });
+          }
+        }
+      } else if (raidType === 'raid10') {
+        // Generate RAID 10 options with different mirror widths
+        [2, 3].forEach(mWidth => {
+          if (driveCount % mWidth === 0 && driveCount >= mWidth * 2) {
+            const vdevCount = driveCount / mWidth;
+            const perf = calcStripedMirrors(driveCount, mWidth);
+            
+            options.push({
+              vdevCount: vdevCount,
+              vdevWidth: mWidth,
+              raidType: raidType,
+              driveCount: driveCount,
+              usable: perf.usable,
+              efficiency: (perf.usable / driveCount) * 100,
+              performance: perf,
+              description: `${vdevCount}× ${mWidth}-way mirrors`
+            });
+          }
+        });
+      }
+      
+      return options.sort((a, b) => {
+        // Sort by vdev count (fewer vdevs = more capacity focused)
+        return a.vdevCount - b.vdevCount;
+      });
+    }
+    
+    function scoreLayoutOption(option) {
+      const perf = option.performance;
+      if (!perf.valid) return { score: 0, triangleScores: { cheap: 0, fast: 0, reliable: 0 } };
+      
+      const triangleScores = calculateTriangleScores(option.raidType, option.driveCount, perf);
+      const rebuildScore = calculateRebuildScore(option.raidType, option.driveCount, 
+        currentDriveSize > 0 ? perf.usable * currentDriveSize : 0);
+      
+      // Calculate rebuild time penalty based on vdev configuration
+      let rebuildTimePenalty = 0;
+      if (option.raidType.startsWith('raidz')) {
+        // Larger vdevs = longer rebuild times
+        const vdevSizePenalty = Math.max(0, (option.vdevWidth - 6) * 5);
+        // More vdevs = potential concurrent rebuilds (good)
+        const concurrentBonus = Math.min(20, (option.vdevCount - 1) * 5);
+        rebuildTimePenalty = vdevSizePenalty - concurrentBonus;
+      }
+      
+      const rebuildScoreAdjusted = Math.max(0, (typeof rebuildScore.score === 'number' ? rebuildScore.score * 10 : 50) - rebuildTimePenalty);
+      
+      // Calculate composite scores based on priority
+      let score = 0;
+      if (optimizerPriority === 'balanced') {
+        score = (triangleScores.cheap + triangleScores.fast + triangleScores.reliable + rebuildScoreAdjusted) / 4;
+      } else if (optimizerPriority === 'performance') {
+        score = triangleScores.fast * 0.5 + triangleScores.reliable * 0.3 + triangleScores.cheap * 0.2;
+      } else if (optimizerPriority === 'rebuild') {
+        score = rebuildScoreAdjusted * 0.5 + triangleScores.reliable * 0.3 + triangleScores.fast * 0.2;
+      }
+      
+      return { 
+        score: score, 
+        triangleScores: triangleScores, 
+        rebuildScore: rebuildScore,
+        rebuildScoreAdjusted: rebuildScoreAdjusted 
+      };
+    }
+    
+    function getLayoutProsAndCons(option) {
+      const pros = [];
+      const cons = [];
+      
+      if (option.raidType.startsWith('raidz')) {
+        if (option.vdevCount === 1) {
+          pros.push("Maximum capacity");
+          cons.push("Single point of failure");
+          if (option.vdevWidth > 8) {
+            cons.push("Slow rebuilds");
+          }
+        } else {
+          pros.push("Faster concurrent rebuilds");
+          pros.push("Better fault isolation");
+          if (option.vdevCount >= 3) {
+            pros.push("Excellent performance scaling");
+          }
+        }
+        
+        if (option.vdevWidth <= 6) {
+          pros.push("Quick rebuild times");
+        } else if (option.vdevWidth >= 10) {
+          cons.push("Long rebuild times");
+        }
+        
+        if (option.efficiency >= 80) {
+          pros.push("High storage efficiency");
+        } else if (option.efficiency <= 60) {
+          cons.push("Lower storage efficiency");
+        }
+      } else if (option.raidType === 'raid10') {
+        pros.push("Excellent performance");
+        pros.push("Fast rebuilds");
+        if (option.vdevWidth === 3) {
+          pros.push("Extra redundancy");
+          cons.push("Lower efficiency");
+        }
+      }
+      
+      return { pros, cons };
+    }
+    
+    function renderOptimizerSection() {
+      if (!advancedMode || (!currentRaidType.startsWith('raidz') && currentRaidType !== 'raid10')) {
+        return '';
+      }
+      
+      const options = generateLayoutOptions(currentDriveCount, currentRaidType);
+      if (options.length <= 1) {
+        return '';
+      }
+      
+      // Score all options and find the best one
+      const scoredOptions = options.map(option => ({
+        ...option,
+        ...scoreLayoutOption(option)
+      }));
+      
+      const bestOption = scoredOptions.reduce((best, current) => 
+        current.score > best.score ? current : best
+      );
+      
+      const optionsHtml = scoredOptions.map(option => {
+        const isRecommended = option === bestOption;
+        const { pros, cons } = getLayoutProsAndCons(option);
+        
+        return `
+          <div class="optimizer-card ${isRecommended ? 'recommended' : ''}">
+            <div class="optimizer-header">
+              <div class="optimizer-layout-title">${option.description}</div>
+              <div class="optimizer-layout-subtitle">${option.usable.toFixed(1)} drives usable • ${option.efficiency.toFixed(0)}% efficient</div>
+            </div>
+            <div class="optimizer-triangle">
+              <div class="optimizer-triangle-bar">
+                <div class="optimizer-triangle-label">Cheap</div>
+                <div class="optimizer-triangle-progress">
+                  <div class="optimizer-triangle-fill" style="width: ${option.triangleScores.cheap}%; background: ${getProgressBarColor(option.triangleScores.cheap)};"></div>
+                </div>
+                <div class="optimizer-triangle-value">${option.triangleScores.cheap.toFixed(0)}%</div>
+              </div>
+              <div class="optimizer-triangle-bar">
+                <div class="optimizer-triangle-label">Fast</div>
+                <div class="optimizer-triangle-progress">
+                  <div class="optimizer-triangle-fill" style="width: ${option.triangleScores.fast}%; background: ${getProgressBarColor(option.triangleScores.fast)};"></div>
+                </div>
+                <div class="optimizer-triangle-value">${option.triangleScores.fast.toFixed(0)}%</div>
+              </div>
+              <div class="optimizer-triangle-bar">
+                <div class="optimizer-triangle-label">Reliable</div>
+                <div class="optimizer-triangle-progress">
+                  <div class="optimizer-triangle-fill" style="width: ${option.triangleScores.reliable}%; background: ${getProgressBarColor(option.triangleScores.reliable)};"></div>
+                </div>
+                <div class="optimizer-triangle-value">${option.triangleScores.reliable.toFixed(0)}%</div>
+              </div>
+            </div>
+            <div class="optimizer-stats">
+              <div class="optimizer-stat">
+                <div class="optimizer-stat-label">Read</div>
+                <div class="optimizer-stat-value">${option.performance.read.toFixed(1)}×</div>
+              </div>
+              <div class="optimizer-stat">
+                <div class="optimizer-stat-label">Write</div>
+                <div class="optimizer-stat-value">${option.performance.write.toFixed(1)}×</div>
+              </div>
+              <div class="optimizer-stat">
+                <div class="optimizer-stat-label">Rebuild</div>
+                <div class="optimizer-stat-value">${option.rebuildScore.score === 'N/A' ? 'N/A' : option.rebuildScore.score + '/10'}</div>
+              </div>
+            </div>
+            ${pros.length > 0 || cons.length > 0 ? `
+              <div class="optimizer-pros-cons">
+                ${pros.length > 0 ? `<div class="optimizer-pros">✓ ${pros.join(', ')}</div>` : ''}
+                ${cons.length > 0 ? `<div class="optimizer-cons">⚠ ${cons.join(', ')}</div>` : ''}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+      
+      return `
+        <div class="optimizer-section">
+          <h5 class="optimizer-title">📊 Advanced Pool Layout Optimizer</h5>
+          <p style="margin: 0 0 12px; color: #666; font-size: 0.9em;">Compare different vdev configurations for your ${currentDriveCount} drives:</p>
+          <div class="optimizer-grid">
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Comparison mode functions
+    function getCurrentConfig() {
+      return {
+        driveCount: currentDriveCount,
+        raidType: currentRaidType,
+        driveSize: currentDriveSize,
+        mirrorWidth: mirrorWidth,
+        vdevWidth: vdevWidth,
+        workloadMode: workloadMode,
+        perfModel: perfModel,
+        slogEnabled: slogEnabled,
+        systemRam: systemRam
+      };
+    }
+    function applyConfig(config) {
+      currentDriveCount = config.driveCount;
+      currentRaidType = config.raidType;
+      currentDriveSize = config.driveSize;
+      mirrorWidth = config.mirrorWidth;
+      vdevWidth = config.vdevWidth;
+      workloadMode = config.workloadMode;
+      perfModel = config.perfModel;
+      slogEnabled = config.slogEnabled || false;
+      systemRam = config.systemRam || 32;
+      
+      document.getElementById('drive-count').value = String(currentDriveCount);
+      document.getElementById('drive-size').value = String(currentDriveSize);
+      document.getElementById('mirror-width').value = String(mirrorWidth);
+      document.getElementById('vdev-width').value = String(vdevWidth);
+      document.getElementById('workload-mode').value = workloadMode;
+      document.getElementById('perf-model').value = perfModel;
+      document.getElementById('slog-device').checked = slogEnabled;
+      document.getElementById('system-ram').value = String(systemRam);
+      
+      refreshVdevWidthOptions();
+      maybeAutoSetRaidZWidth();
+      updateRaidButtonsDisabledState();
+      switchTab(currentRaidType);
+    }
+    function startComparison() {
+      lockedConfig = getCurrentConfig();
+      comparisonMode = true;
+      render();
+    }
+    function swapConfigurations() {
+      if (!lockedConfig) return;
+      const temp = getCurrentConfig();
+      applyConfig(lockedConfig);
+      lockedConfig = temp;
+      render();
+    }
+    function clearComparison() {
+      lockedConfig = null;
+      comparisonMode = false;
+      render();
+    }
+    function renderComparisonCard(config, title, subtitle, isCurrent) {
+      const perf = calculatePerformance(config.driveCount, config.raidType);
+      const triangleScores = calculateTriangleScores(config.raidType, config.driveCount, perf);
+      const rebuildScore = calculateRebuildScore(config.raidType, config.driveCount, config.driveSize > 0 ? perf.usable * config.driveSize : 0);
+      
+      const cardClass = isCurrent ? 'comparison-card comparison-current' : 'comparison-card comparison-locked';
+      
+      return `
+        <div class="${cardClass}">
+          <div class="comparison-header">
+            <div>
+              <div class="comparison-title">${title}</div>
+              <div class="comparison-subtitle">${subtitle}</div>
+            </div>
+          </div>
+          <div class="comparison-triangle">
+            <div class="comparison-triangle-bar">
+              <div class="comparison-triangle-label">Cheap</div>
+              <div class="comparison-triangle-progress">
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.cheap}%; background: ${getProgressBarColor(triangleScores.cheap)};"></div>
+              </div>
+              <div class="comparison-triangle-value">${triangleScores.cheap.toFixed(0)}%</div>
+            </div>
+            <div class="comparison-triangle-bar">
+              <div class="comparison-triangle-label">Fast</div>
+              <div class="comparison-triangle-progress">
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.fast}%; background: ${getProgressBarColor(triangleScores.fast)};"></div>
+              </div>
+              <div class="comparison-triangle-value">${triangleScores.fast.toFixed(0)}%</div>
+            </div>
+            <div class="comparison-triangle-bar">
+              <div class="comparison-triangle-label">Reliable</div>
+              <div class="comparison-triangle-progress">
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.reliable}%; background: ${getProgressBarColor(triangleScores.reliable)};"></div>
+              </div>
+              <div class="comparison-triangle-value">${triangleScores.reliable.toFixed(0)}%</div>
+            </div>
+          </div>
+          <div class="comparison-stats">
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Read Speed</div>
+              <div class="comparison-stat-value">${perf.read.toFixed(1)}×</div>
+            </div>
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Write Speed</div>
+              <div class="comparison-stat-value">${perf.write.toFixed(1)}×</div>
+            </div>
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Rebuild</div>
+              <div class="comparison-stat-value">${rebuildScore.score === 'N/A' ? 'N/A' : rebuildScore.score + '/10'}</div>
+            </div>
+            <div class="comparison-stat">
+              <div class="comparison-stat-label">Efficiency</div>
+              <div class="comparison-stat-value">${((perf.usable / config.driveCount) * 100).toFixed(0)}%</div>
+            </div>
+          </div>
+        </div>
+      `;
     }
     // Main performance calculation
     function calculatePerformance(driveCount, raidType) {
@@ -669,121 +1050,6 @@
       
       return warnings;
     }
-    // Comparison mode functions
-    function getCurrentConfig() {
-      return {
-        driveCount: currentDriveCount,
-        raidType: currentRaidType,
-        driveSize: currentDriveSize,
-        mirrorWidth: mirrorWidth,
-        vdevWidth: vdevWidth,
-        workloadMode: workloadMode,
-        perfModel: perfModel,
-        slogEnabled: slogEnabled,
-        systemRam: systemRam
-      };
-    }
-    function applyConfig(config) {
-      currentDriveCount = config.driveCount;
-      currentRaidType = config.raidType;
-      currentDriveSize = config.driveSize;
-      mirrorWidth = config.mirrorWidth;
-      vdevWidth = config.vdevWidth;
-      workloadMode = config.workloadMode;
-      perfModel = config.perfModel;
-      slogEnabled = config.slogEnabled || false;
-      systemRam = config.systemRam || 32;
-      
-      document.getElementById('drive-count').value = String(currentDriveCount);
-      document.getElementById('drive-size').value = String(currentDriveSize);
-      document.getElementById('mirror-width').value = String(mirrorWidth);
-      document.getElementById('vdev-width').value = String(vdevWidth);
-      document.getElementById('workload-mode').value = workloadMode;
-      document.getElementById('perf-model').value = perfModel;
-      document.getElementById('slog-device').checked = slogEnabled;
-      document.getElementById('system-ram').value = String(systemRam);
-      
-      refreshVdevWidthOptions();
-      maybeAutoSetRaidZWidth();
-      updateRaidButtonsDisabledState();
-      switchTab(currentRaidType);
-    }
-    function startComparison() {
-      lockedConfig = getCurrentConfig();
-      comparisonMode = true;
-      render();
-    }
-    function swapConfigurations() {
-      if (!lockedConfig) return;
-      const temp = getCurrentConfig();
-      applyConfig(lockedConfig);
-      lockedConfig = temp;
-      render();
-    }
-    function clearComparison() {
-      lockedConfig = null;
-      comparisonMode = false;
-      render();
-    }
-    function renderComparisonCard(config, title, subtitle, isCurrent) {
-      const perf = calculatePerformance(config.driveCount, config.raidType);
-      const triangleScores = calculateTriangleScores(config.raidType, config.driveCount, perf);
-      const rebuildScore = calculateRebuildScore(config.raidType, config.driveCount, config.driveSize > 0 ? perf.usable * config.driveSize : 0);
-      
-      const cardClass = isCurrent ? 'comparison-card comparison-current' : 'comparison-card comparison-locked';
-      
-      return `
-        <div class="${cardClass}">
-          <div class="comparison-header">
-            <div>
-              <div class="comparison-title">${title}</div>
-              <div class="comparison-subtitle">${subtitle}</div>
-            </div>
-          </div>
-          <div class="comparison-triangle">
-            <div class="comparison-triangle-bar">
-              <div class="comparison-triangle-label">Cheap</div>
-              <div class="comparison-triangle-progress">
-                <div class="comparison-triangle-fill" style="width: ${triangleScores.cheap}%; background: ${getProgressBarColor(triangleScores.cheap)};"></div>
-              </div>
-              <div class="comparison-triangle-value">${triangleScores.cheap.toFixed(0)}%</div>
-            </div>
-            <div class="comparison-triangle-bar">
-              <div class="comparison-triangle-label">Fast</div>
-              <div class="comparison-triangle-progress">
-                <div class="comparison-triangle-fill" style="width: ${triangleScores.fast}%; background: ${getProgressBarColor(triangleScores.fast)};"></div>
-              </div>
-              <div class="comparison-triangle-value">${triangleScores.fast.toFixed(0)}%</div>
-            </div>
-            <div class="comparison-triangle-bar">
-              <div class="comparison-triangle-label">Reliable</div>
-              <div class="comparison-triangle-progress">
-                <div class="comparison-triangle-fill" style="width: ${triangleScores.reliable}%; background: ${getProgressBarColor(triangleScores.reliable)};"></div>
-              </div>
-              <div class="comparison-triangle-value">${triangleScores.reliable.toFixed(0)}%</div>
-            </div>
-          </div>
-          <div class="comparison-stats">
-            <div class="comparison-stat">
-              <div class="comparison-stat-label">Read Speed</div>
-              <div class="comparison-stat-value">${perf.read.toFixed(1)}×</div>
-            </div>
-            <div class="comparison-stat">
-              <div class="comparison-stat-label">Write Speed</div>
-              <div class="comparison-stat-value">${perf.write.toFixed(1)}×</div>
-            </div>
-            <div class="comparison-stat">
-              <div class="comparison-stat-label">Rebuild</div>
-              <div class="comparison-stat-value">${rebuildScore.score === 'N/A' ? 'N/A' : rebuildScore.score + '/10'}</div>
-            </div>
-            <div class="comparison-stat">
-              <div class="comparison-stat-label">Efficiency</div>
-              <div class="comparison-stat-value">${((perf.usable / config.driveCount) * 100).toFixed(0)}%</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
     // Main explanation and display functions
     function getRaidExplanation(raidType) {
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
@@ -916,6 +1182,7 @@
             </div>
           </div>
         ` : ''}
+        ${renderOptimizerSection()}
         ${slogEnabled && currentRaidType.startsWith('raidz') ? `
           <div class="inline-note">
             <h5>SLOG Device Sizing</h5>
@@ -1121,6 +1388,7 @@
       const slogWrap = document.getElementById('slog-wrapper');
       const l2arcWrap = document.getElementById('l2arc-wrapper');
       const specialWrap = document.getElementById('special-wrapper');
+      const optimizerWrap = document.getElementById('optimizer-priority-wrapper');
       const isRaidZ = currentRaidType && currentRaidType.startsWith('raidz');
       const isRaid10 = currentRaidType === 'raid10';
       
@@ -1133,6 +1401,7 @@
       if (slogWrap) slogWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
       if (l2arcWrap) l2arcWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
       if (specialWrap) specialWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
+      if (optimizerWrap) optimizerWrap.classList.toggle('hidden', !advancedMode);
     }
     function pickDefaultRaidZWidth(driveCount, parity) {
       const preferred = [4,6,8,10,12,14,16,5,7,9,11,13,15];
@@ -1178,7 +1447,7 @@
       const state = { 
         c: currentDriveCount, t: currentRaidType, s: currentDriveSize, 
         mw: mirrorWidth, vw: vdevWidth, adv: advancedMode, 
-        wl: workloadMode, pm: perfModel, slog: slogEnabled, ram: systemRam, comp: comparisonMode, locked: lockedConfig 
+        wl: workloadMode, pm: perfModel, slog: slogEnabled, ram: systemRam, comp: comparisonMode, locked: lockedConfig, opt: optimizerPriority 
       };
       try { localStorage.setItem('raidcalc', JSON.stringify(state)); } catch(e) {}
       applyAdvancedVisibility();
@@ -1263,6 +1532,11 @@
       render();
     });
     
+    document.getElementById('optimizer-priority').addEventListener('change', (e) => {
+      optimizerPriority = e.target.value;
+      render();
+    });
+    
     const advToggleEl = document.getElementById('advanced-toggle');
     if (advToggleEl) {
       advToggleEl.addEventListener('change', (e) => {
@@ -1308,6 +1582,7 @@
         if (st.ram) { systemRam = st.ram; document.getElementById('system-ram').value = String(st.ram); }
         if (typeof st.comp !== 'undefined') { comparisonMode = !!st.comp; }
         if (st.locked) { lockedConfig = st.locked; }
+        if (st.opt) { optimizerPriority = st.opt; document.getElementById('optimizer-priority').value = st.opt; }
       } catch(e) {}
       
       document.getElementById('advanced-toggle').checked = advancedMode;
