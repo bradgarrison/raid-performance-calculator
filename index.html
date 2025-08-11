@@ -267,16 +267,6 @@
     <div class="chart-container">
       <canvas id="chart"></canvas>
     </div>
-    <div class="storage-info">
-      <h4>Storage Breakdown</h4>
-      <div id="storage-display">
-        <p style="text-align:center; color:#666; font-style:italic; margin:8px 0;">Select a drive size to see storage breakdown</p>
-      </div>
-    </div>
-    <div id="rebuild-note" class="inline-note hidden">
-      <h5>Rebuild time (estimate)</h5>
-      <p id="rebuild-note-text"></p>
-    </div>
     <div id="comparison-section"></div>
     <div id="optimizer-section"></div>
   </div>
@@ -1064,9 +1054,9 @@
         'raid10': { title:'RAID 10 (Stripe of Mirrors)', explanation:`Mirrors striped together. ${mirrorWidth === 2 ? 'Traditional 2-way mirrors' : mirrorWidth === 3 ? '3-way mirrors for extra redundancy' : `${mirrorWidth}-way mirrors`} with excellent performance.`, rebuild: rebuildInfo },
         'raid5': { title:'RAID 5 (Single Parity)', explanation:'Distributes data and single parity across drives. Survives one failure; efficiency of N-1.', rebuild: rebuildInfo },
         'raid6': { title:'RAID 6 (Double Parity)', explanation:'Like RAID 5 but two parity blocks. Survives two failures; higher write penalty.', rebuild: rebuildInfo },
-        'raidz1': { title:'RAIDZ1 (ZFS Single Parity)', explanation:`ZFS single parity with COW and checksums. Modeled as multiple equal-width vdevs.${slogEnabled ? ` SLOG device (${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended) accelerates sync writes for databases/VMs.` : ''}`, rebuild: rebuildInfo },
-        'raidz2': { title:'RAIDZ2 (ZFS Double Parity)', explanation:`ZFS double parity. Common sweet spot for capacity pools; modeled as multiple equal-width vdevs.${slogEnabled ? ` SLOG device (${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended) accelerates sync writes for databases/VMs.` : ''}`, rebuild: rebuildInfo },
-        'raidz3': { title:'RAIDZ3 (ZFS Triple Parity)', explanation:`ZFS triple parity for very large arrays. Modeled as multiple equal-width vdevs.${slogEnabled ? ` SLOG device (${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended) accelerates sync writes for databases/VMs.` : ''}`, rebuild: rebuildInfo }
+        'raidz1': { title:'RAIDZ1 (ZFS Single Parity)', explanation:`ZFS single parity with COW and checksums. Modeled as multiple equal-width vdevs.`, rebuild: rebuildInfo },
+        'raidz2': { title:'RAIDZ2 (ZFS Double Parity)', explanation:`ZFS double parity. Common sweet spot for capacity pools; modeled as multiple equal-width vdevs.`, rebuild: rebuildInfo },
+        'raidz3': { title:'RAIDZ3 (ZFS Triple Parity)', explanation:`ZFS triple parity for very large arrays. Modeled as multiple equal-width vdevs.`, rebuild: rebuildInfo }
       };
       return explanations[raidType] || explanations['mirror'];
     }
@@ -1187,15 +1177,15 @@
             <div class="score-description">${e.rebuild.label}<br><em>${e.rebuild.reason}</em></div>
           </div>
         </div>
+        <div class="storage-info">
+          <h4>Storage Breakdown</h4>
+          <div id="storage-display">
+            <p style="text-align:center; color:#666; font-style:italic; margin:8px 0;">Select a drive size to see storage breakdown</p>
+          </div>
+        </div>
         <div class="comparison-controls">
           ${!comparisonMode ? `<button class="comparison-btn" id="start-comparison-btn">Compare Configurations</button>` : ``}
         </div>
-        ${slogEnabled && currentRaidType.startsWith('raidz') ? `
-          <div class="inline-note">
-            <h5>SLOG Device Sizing</h5>
-            <p>For ${systemRam}GB RAM with ${workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing'} workload: <strong>${calculateSlogSize(systemRam, workloadMode).recommended}GB recommended</strong> (range: ${calculateSlogSize(systemRam, workloadMode).min}-${calculateSlogSize(systemRam, workloadMode).max}GB). Use mirrored NVMe SSDs for redundancy.</p>
-          </div>
-        ` : ''}
         `;
       
       document.getElementById('scoring-section').innerHTML = scoringHtml;
@@ -1204,16 +1194,6 @@
       const startBtn = document.getElementById('start-comparison-btn');
       if (startBtn) {
         startBtn.addEventListener('click', startComparison);
-      }
-      
-      const swapBtn = document.getElementById('swap-comparison-btn');
-      if (swapBtn) {
-        swapBtn.addEventListener('click', swapConfigurations);
-      }
-      
-      const clearBtn = document.getElementById('clear-comparison-btn');
-      if (clearBtn) {
-        clearBtn.addEventListener('click', clearComparison);
       }
     }
     function createChart() {
@@ -1333,6 +1313,35 @@
       const lostToReserve = Math.max(0, usableRaid - usableAfterReserve);
       const raidEff = total > 0 ? ((usableRaid / total) * 100).toFixed(1) : '0.0';
       
+      // Get rebuild time and SLOG info
+      const e = getRaidExplanation(currentRaidType);
+      let operationalHtml = '';
+      
+      const operationalItems = [];
+      
+      // Add rebuild time if available
+      if (e.rebuild.timePerTB && currentDriveSize > 0) {
+        const estimatedHours = (currentDriveSize * e.rebuild.timePerTB).toFixed(1);
+        operationalItems.push(`<strong>Rebuild time:</strong> ~${estimatedHours} hours for one failed ${currentDriveSize}${useBinary ? ' TiB' : ' TB'} drive`);
+      }
+      
+      // Add SLOG info if applicable
+      if (slogEnabled && currentRaidType.startsWith('raidz')) {
+        const slogInfo = calculateSlogSize(systemRam, workloadMode);
+        const workloadName = workloadMode === 'seq' ? 'File Server' : workloadMode === 'rand' ? 'Database' : workloadMode === 'vm' ? 'VM Host' : 'Video Editing';
+        operationalItems.push(`<strong>SLOG sizing:</strong> ${slogInfo.recommended}GB recommended for ${systemRam}GB RAM with ${workloadName} workload (range: ${slogInfo.min}-${slogInfo.max}GB). Use mirrored NVMe SSDs for redundancy`);
+      }
+      
+      if (operationalItems.length > 0) {
+        operationalHtml = `
+          <div style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+            <div style="font-weight: 600; color: #495057; font-size: 0.9em; margin-bottom: 8px;">Operational Considerations</div>
+            <div style="color: #212529; font-size: 0.9em; line-height: 1.4;">
+              ${operationalItems.join('<br><br>')}
+            </div>
+          </div>`;
+      }
+      
       storageDisplay.innerHTML = `
         <div class="storage-grid">
           <div class="storage-item storage-total">
@@ -1351,23 +1360,10 @@
             <div class="storage-label">RAID Efficiency</div>
             <div class="storage-value">${raidEff}%</div>
           </div>
-        </div>`;
+        </div>${operationalHtml}`;
     }
     function updateRebuildNote() {
-      const note = document.getElementById('rebuild-note');
-      const noteText = document.getElementById('rebuild-note-text');
-      if (!note || !noteText) return;
-      
-      const e = getRaidExplanation(currentRaidType);
-      if (e.rebuild.timePerTB && currentDriveSize > 0) {
-        const useBinary = document.getElementById('binary-units').checked;
-        const estimatedHours = (currentDriveSize * e.rebuild.timePerTB).toFixed(1);
-        note.classList.remove('hidden');
-        noteText.textContent = `~${estimatedHours} hours to rebuild one failed ${currentDriveSize}${useBinary ? ' TiB' : ' TB'} drive.`;
-      } else {
-        note.classList.add('hidden');
-        noteText.textContent = '';
-      }
+      // This function is no longer needed as rebuild time is now integrated into storage info
     }
     function applyAdvancedVisibility() {
       const advToggles = document.getElementById('advanced-toggles');
@@ -1431,9 +1427,8 @@
     }
     function render() {
       updateRaidExplanation();
-      createChart();
       updateStorageInfo();
-      updateRebuildNote();
+      createChart();
       
       // Update comparison section after basic performance info
       const comparisonContainer = document.getElementById('comparison-section');
