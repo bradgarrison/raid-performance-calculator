@@ -1,0 +1,583 @@
+<!-- 
+RAID Performance Calculator
+Author: Brad Garrison
+License: MIT
+GitHub: https://github.com/bradgarrison/raid-performance-calculator
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAID Performance Calculator (Improved)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <style>
+    :root { --bg1:#667eea; --bg2:#764ba2; --text:#333; --muted:#666; --primary:#007bff; --danger:#dc3545; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; margin:0; padding:20px; min-height:100vh; background:linear-gradient(135deg,var(--bg1) 0%,var(--bg2) 100%); }
+    .container { max-width:1200px; margin:0 auto; background:#fff; border-radius:15px; padding:30px; box-shadow:0 20px 40px rgba(0,0,0,.1); }
+    h1 { text-align:center; color:var(--text); margin:.1em 0 .3em; font-size:2.2em; }
+    .subtitle { text-align:center; color:var(--muted); margin-bottom:24px; font-size:1.05em; }
+    .controls { display:flex; gap:16px; align-items:center; justify-content:center; flex-wrap:wrap; margin:20px 0 10px; }
+    .drive-selector { display:flex; align-items:center; gap:10px; background:#f8f9fa; padding:8px 10px; border-radius:8px; border:1px solid #e9ecef; }
+    .drive-selector label { font-weight:600; color:var(--text); }
+    .drive-selector select { padding:8px 12px; border:2px solid var(--primary); border-radius:8px; font-size:1em; background:#fff; cursor:pointer; }
+    .toggles { display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+    .toggles label { background:#f8f9fa; padding:8px 10px; border-radius:8px; border:1px solid #e9ecef; color:#333; }
+    .tab-buttons { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:16px 0 10px; }
+    .tab-btn { padding:10px 18px; border:none; border-radius:8px; background:#6c757d; color:#fff; cursor:pointer; transition:all .2s ease; }
+    .tab-btn:hover { background:#5a6268; transform:translateY(-2px); }
+    .tab-btn.active { background:var(--primary); box-shadow:0 4px 8px rgba(0,123,255,.3); }
+    .chart-container { position:relative; height:420px; margin:18px 0; }
+    .config-info { background:#e3f2fd; border-left:4px solid #2196f3; padding:18px; margin:12px 0; border-radius:0 8px 8px 0; }
+    .config-info h4 { color:#1976d2; margin:0 0 10px; }
+    .storage-info h4 { color:#856404; margin:0 0 8px; font-size:1.05em; }
+    .storage-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:8px; }
+    .storage-item { background:#fff; padding:12px; border-radius:8px; border:1px solid #dee2e6; }
+    .storage-label { font-weight:600; color:#495057; font-size:.9em; margin-bottom:4px; }
+    .storage-value { font-size:1.1em; color:#212529; }
+    .storage-total { background:#e3f2fd; border-color:#2196f3; }
+    .storage-usable { background:#e8f5e9; border-color:#4caf50; }
+    .storage-lost { background:#ffebee; border-color:#f44336; }
+    .explanation-text { margin:10px 0; line-height:1.6; color:#444; }
+    .score-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin:14px 0; }
+    .score-card { background:#fff; border:2px solid #e0e0e0; border-radius:10px; padding:14px; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.06); }
+    .score-card h5 { margin:0 0 8px; color:#333; font-size:.9em; text-transform:uppercase; letter-spacing:.4px; }
+    .score-value { font-size:1.7em; font-weight:800; margin:6px 0; }
+    .score-description { font-size:.8em; color:#666; margin:0; }
+    .score-excellent { color:#28a745; }
+    .score-good { color:#17a2b8; }
+    .score-fair { color:#ffc107; }
+    .score-poor { color:#dc3545; }
+    .inline-note { background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:8px; }
+    .inline-note h5 { margin:0 0 6px; font-size:.95em; color:#333; }
+    .inline-note p { margin:0; color:#555; }
+    .notes { background:#f8f9fa; border-left:4px solid var(--primary); padding:18px; margin:16px 0 0; border-radius:0 8px 8px 0; }
+    .notes h3 { color:var(--primary); margin:0 0 8px; }
+    .notes ul { margin:8px 0 0 18px; }
+    .hidden { display:none !important; }
+    .section-divider { border:0; border-top:1px solid #e9ecef; margin:12px 0; }
+    .error { outline: 2px solid var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>RAID Performance Calculator</h1>
+    <p class="subtitle">Compare RAID configurations with your chosen drive count</p>
+    <div class="controls" aria-label="Configuration controls">
+      <div class="drive-selector">
+        <label for="drive-count">Number of Drives:</label>
+        <select id="drive-count">
+          <option value="2">2 Drives</option>
+          <option value="3">3 Drives</option>
+          <option value="4" selected>4 Drives</option>
+          <option value="5">5 Drives</option>
+          <option value="6">6 Drives</option>
+          <option value="7">7 Drives</option>
+          <option value="8">8 Drives</option>
+          <option value="9">9 Drives</option>
+          <option value="10">10 Drives</option>
+          <option value="11">11 Drives</option>
+          <option value="12">12 Drives</option>
+        </select>
+      </div>
+      <div class="drive-selector"><label><input type="checkbox" id="advanced-toggle"> Advanced options</label></div>
+      <div class="drive-selector">
+        <label for="drive-size">Drive Size (Optional):</label>
+        <select id="drive-size">
+          <option value="0">Not specified</option>
+          <option value="0.5">500 GB</option>
+          <option value="1">1 TB</option>
+          <option value="2">2 TB</option>
+          <option value="3">3 TB</option>
+          <option value="4">4 TB</option>
+          <option value="6">6 TB</option>
+          <option value="8">8 TB</option>
+          <option value="10">10 TB</option>
+          <option value="12">12 TB</option>
+          <option value="14">14 TB</option>
+          <option value="16">16 TB</option>
+          <option value="18">18 TB</option>
+          <option value="20">20 TB</option>
+          <option value="24">24 TB</option>
+        </select>
+      </div>
+      <div class="drive-selector" id="mirror-wrapper" title="Number of copies per mirror vdev (ZFS mirrors)">
+        <label for="mirror-width">Mirror width:</label>
+        <select id="mirror-width">
+          <option value="2" selected>2-way</option>
+          <option value="3">3-way</option>
+        </select>
+      </div>
+      <div class="drive-selector" id="vdev-wrapper" title="Number of disks per RAIDZ vdev">
+        <label for="vdev-width">RAIDZ vdev width:</label>
+        <select id="vdev-width">
+          <option value="4" selected>4</option>
+          <option value="6">6</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+        </select>
+      </div>
+      <div class="drive-selector" id="workload-wrapper" title="Workload affects write math: 
+Sequential = large contiguous writes (near linear scaling, parity overhead is modest). 
+Random = many small writes (heavy parity IO amplification).">
+        <label for="workload-mode">Workload:</label>
+        <select id="workload-mode">
+          <option value="seq" selected>Sequential (large files)</option>
+          <option value="rand">Random (small writes)</option>
+        </select>
+      </div>
+    </div>
+    <div class="toggles" id="advanced-toggles">
+      <label><input type="checkbox" id="binary-units"> Use TiB (binary)</label>
+      <label><input type="checkbox" id="reserve-10"> Reserve 10% free space</label>
+    </div>
+    <div class="tab-buttons" role="tablist" aria-label="RAID type">
+      <button class="tab-btn active" id="mirror-btn" aria-pressed="true">RAID 1</button>
+      <button class="tab-btn" id="raid0-btn" aria-pressed="false">RAID 0</button>
+      <button class="tab-btn" id="raid10-btn" aria-pressed="false">RAID 10</button>
+      <button class="tab-btn" id="raid5-btn" aria-pressed="false">RAID 5</button>
+      <button class="tab-btn" id="raid6-btn" aria-pressed="false">RAID 6</button>
+      <button class="tab-btn" id="raidz1-btn" aria-pressed="false">RAIDZ1</button>
+      <button class="tab-btn" id="raidz2-btn" aria-pressed="false">RAIDZ2</button>
+      <button class="tab-btn" id="raidz3-btn" aria-pressed="false">RAIDZ3</button>
+    </div>
+    <div id="invalid-warning" class="inline-note hidden" role="alert" aria-live="polite"></div>
+    <div id="raid-explanation" class="config-info">
+      <h4 id="explanation-title">Configuration Details</h4>
+      <div id="explanation-content"></div>
+      <div id="fault-tolerance" style="margin-top:8px; font-weight:600;"></div>
+      <div id="scoring-section"></div>
+    </div>
+    <hr class="section-divider">
+    <div class="chart-container">
+      <canvas id="chart" aria-label="RAID performance chart" role="img"></canvas>
+    </div>
+    <div class="storage-info">
+      <h4>Storage Breakdown</h4>
+      <div id="storage-display">
+        <p style="text-align:center; color:#666; font-style:italic; margin:8px 0;">Select a drive size to see storage breakdown</p>
+      </div>
+    </div>
+    <div id="rebuild-note" class="inline-note hidden" role="note" aria-label="Rebuild time estimate">
+      <h5>Rebuild time (estimate)</h5>
+      <p id="rebuild-note-text"></p>
+    </div>
+    
+  </div>
+  <script>
+    // Defaults & shared state
+    Chart.defaults.color = '#333';
+    const RAID_LABEL = { mirror:'RAID 1', raid0:'RAID 0', raid10:'RAID 10', raid5:'RAID 5', raid6:'RAID 6', raidz1:'RAIDZ1', raidz2:'RAIDZ2', raidz3:'RAIDZ3' };
+    let chart = null;
+    let currentDriveCount = 4;
+    let currentRaidType = 'mirror';
+    let currentDriveSize = 0; // in TB (0 means not specified)
+    let mirrorWidth = 2;      // copies per mirror vdev
+    let vdevWidth = 4;        // disks per RAIDZ vdev
+    let advancedMode = false; // hide/show advanced UI
+    let workloadMode = 'seq'; // 'seq' = sequential, 'rand' = small random writes
+    function calcStripedMirrors(driveCount, width) {
+      if (driveCount < width || driveCount % width !== 0) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      const vdevs = Math.floor(driveCount / width);
+      // For mirrors/RAID10, random-write throughput ~ #vdevs; sequential reads scale with spindles
+      return { read: driveCount, write: vdevs, usable: vdevs, valid: true, vdevs };
+    }
+    function calcRaidZ(driveCount, parity) {
+      if (vdevWidth < parity + 1) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      if (driveCount < vdevWidth) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      const vdevs = Math.floor(driveCount / vdevWidth);
+      const leftover = driveCount % vdevWidth;
+      if (vdevs === 0) return { read:0, write:0, usable:0, valid:false, vdevs:0 };
+      const dataPerVdev = (vdevWidth - parity);
+      const usable = vdevs * dataPerVdev; // in drive units
+      const read  = vdevs * dataPerVdev;  // # of data spindles for reads
+      // Writes: sequential uses all data disks; random small writes incur parity penalty
+      const penalty = 2 * (parity + 1); // Z1≈4, Z2≈6, Z3≈8 IO per small write
+      const writeSeq = vdevs * dataPerVdev;
+      const writeRand = Math.max(0.25, (vdevs * dataPerVdev) / penalty);
+      const write = (workloadMode === 'seq') ? writeSeq : writeRand;
+      const valid = leftover === 0;       // require full vdevs
+      return { read, write, usable, valid, vdevs };
+    }
+    function calculatePerformance(driveCount, raidType) {
+      switch (raidType) {
+        case 'raid0': {
+          // Idealized linear scaling for reads & writes
+          const n = driveCount;
+          return { read: n, write: n, usable: n, valid: n >= 2 };
+        }
+        case 'raid10':
+          // Read can leverage all spindles, write bound by # of mirrors (N/2 for 2-way)
+          return calcStripedMirrors(driveCount, 2);
+        case 'mirror': {
+          return { read: driveCount, write: 1, usable: 1, valid: true, vdevs: 1 };
+        }
+        case 'raid5': {
+          if (driveCount < 3) return { read:0, write:0, usable:0, valid:false };
+          const n = driveCount;
+          const read = Math.max(1, n - 1); // data disks participate
+          const usable = n - 1;
+          const writeSeq = 0.8 * (n - 1);   // account for parity calc/rotation overhead
+          const writeRand = Math.max(0.5, (n - 1) / 4); // ~4 IOs per random write
+          const write = (workloadMode === 'seq') ? writeSeq : writeRand;
+          return { read, write, usable, valid: true };
+        }
+        case 'raid6': {
+          if (driveCount < 4) return { read:0, write:0, usable:0, valid:false };
+          const n = driveCount;
+          const read = Math.max(1, n - 2);
+          const usable = n - 2;
+          const writeSeq = 0.75 * (n - 2);  // heavier parity overhead than R5
+          const writeRand = Math.max(0.5, (n - 2) / 6); // ~6 IOs per random write
+          const write = (workloadMode === 'seq') ? writeSeq : writeRand;
+          return { read, write, usable, valid: true };
+        }
+        case 'raidz1': return calcRaidZ(driveCount, 1);
+        case 'raidz2': return calcRaidZ(driveCount, 2);
+        case 'raidz3': return calcRaidZ(driveCount, 3);
+        default: return { read:1, write:1, usable:1, valid:true };
+      }
+    }
+    function getRaidExplanation(raidType) {
+      // Calculate actual performance to get consistent scores
+      const perf = calculatePerformance(currentDriveCount, currentRaidType);
+      const norm = Math.max(1, currentDriveCount);
+      const actualWriteScore = perf.valid ? Math.min(10, Math.max(1, Math.round((perf.write / norm) * 10))) : 1;
+      
+      // Determine write score class and label based on actual performance
+      const getScoreInfo = (score) => {
+        if (score >= 8) return { label: 'Excellent', class: 'score-excellent' };
+        if (score >= 6) return { label: 'Good', class: 'score-good' };
+        if (score >= 4) return { label: 'Fair', class: 'score-fair' };
+        return { label: 'Poor', class: 'score-poor' };
+      };
+      
+      const writeScoreInfo = getScoreInfo(actualWriteScore);
+      
+      const explanations = {
+        'raid0': { title:'RAID 0 (Striping)', explanation:'Data is striped across all drives with no redundancy. Maximum performance and storage efficiency, but any drive failure destroys the entire array.', speed:{score:10,label:'Excellent',class:'score-excellent',reason:'Maximum read and write speed'}, risk:{score:1,label:'Poor',class:'score-poor',reason:'No fault tolerance - any failure kills array'}, cost:{score:10,label:'Excellent',class:'score-excellent',reason:'100% storage efficiency'}, rebuild:{score:'N/A',label:'N/A',class:'score-fair',reason:'No rebuild - restore from backup', timePerTB:null} },
+        'mirror': { title:'RAID 1 (Full Mirror)', explanation:'All drives contain identical data (a single mirrored set). Capacity is equal to one drive. Reads scale with the number of drives; writes are roughly equal to the speed of a single drive.', speed:{score:8,label:'Excellent',class:'score-excellent',reason:'Fast reads; writes limited by single mirror set'}, risk:{score:9,label:'Excellent',class:'score-excellent',reason:'Multiple failures tolerated as long as one drive survives'}, cost:{score:4,label:'Fair',class:'score-fair',reason:'~50–66% overhead (2- or 3-way mirror)'}, rebuild:{score:9,label:'Excellent',class:'score-excellent',reason:'Fast mirror resync', timePerTB: 2} },
+        'raid10': { title:'RAID 10 (Stripe of 2-way Mirrors)', explanation:'Pairs of mirrors striped together. Excellent performance and good redundancy; requires even drive count.', speed:{score:9,label:'Excellent',class:'score-excellent',reason:'Fast reads and parallel writes'}, risk:{score:7,label:'Good',class:'score-good',reason:'One failure per vdev (more if in separate vdevs)'}, cost:{score:4,label:'Fair',class:'score-fair',reason:'50% storage overhead'}, rebuild:{score:10,label:'Excellent',class:'score-excellent',reason:'Very fast parallel rebuilds', timePerTB: 1.5} },
+        'raid5': { title:'RAID 5 (Single Parity)', explanation:'Distributes data and single parity across drives. Survives one failure; efficiency of N-1.', speed:{score: actualWriteScore, label: writeScoreInfo.label, class: writeScoreInfo.class, reason:`Parity write penalty ${workloadMode === 'rand' ? '(heavy for small random writes)' : '(moderate for sequential)'}`}, risk:{score:5,label:'Fair',class:'score-fair',reason:'Only one-drive fault tolerance'}, cost:{score:8,label:'Excellent',class:'score-excellent',reason:'Only 1 drive overhead'}, rebuild:{score: 3,label: 'Poor',class: 'score-poor',reason:'Slow rebuild, array vulnerable', timePerTB: 6} },
+        'raid6': { title:'RAID 6 (Double Parity)', explanation:'Like RAID 5 but two parity blocks. Survives two failures; higher write penalty.', speed:{score: actualWriteScore, label: writeScoreInfo.label, class: writeScoreInfo.class, reason:`Heavy parity write penalty ${workloadMode === 'rand' ? '(severe for small random writes)' : '(significant for sequential)'}`}, risk:{score:6,label:'Good',class:'score-good',reason:'Two-drive fault tolerance'}, cost:{score:7,label:'Good',class:'score-good',reason:'Two drives overhead'}, rebuild:{score: 1,label: 'Poor',class: 'score-poor',reason:'Very slow double parity rebuild', timePerTB: 8} },
+        'raidz1': { title:'RAIDZ1 (ZFS Single Parity)', explanation:'ZFS single parity with COW and checksums. Modeled as multiple equal-width vdevs.', speed:{score: Math.max(actualWriteScore, 6), label:'Good',class:'score-good',reason:'Reads scale with data spindles'}, risk:{score:8,label:'Excellent',class:'score-excellent',reason:'Self-healing checksums'}, cost:{score:8,label:'Excellent',class:'score-excellent',reason:'Only 1 drive overhead per vdev'}, rebuild:{score:8,label:'Excellent',class:'score-excellent',reason:'Resilver only used blocks', timePerTB: 4} },
+        'raidz2': { title:'RAIDZ2 (ZFS Double Parity)', explanation:'ZFS double parity. Common sweet spot for capacity pools; modeled as multiple equal-width vdevs.', speed:{score: Math.max(actualWriteScore, 6), label:'Good',class:'score-good',reason:'Balanced for large pools'}, risk:{score:9,label:'Excellent',class:'score-excellent',reason:'Two-drive tolerance + checksums'}, cost:{score:7,label:'Good',class:'score-good',reason:'Two drives overhead per vdev'}, rebuild:{score: 7,label:'Good',class:'score-good',reason:'Reasonable resilver times', timePerTB: 5} },
+        'raidz3': { title:'RAIDZ3 (ZFS Triple Parity)', explanation:'ZFS triple parity for very large arrays. Modeled as multiple equal-width vdevs.', speed:{score: Math.max(actualWriteScore, 5), label:'Fair',class:'score-fair',reason:'More parity work'}, risk:{score:10,label:'Excellent',class:'score-excellent',reason:'Three-drive tolerance'}, cost:{score:6,label:'Good',class:'score-good',reason:'Three drives overhead per vdev'}, rebuild:{score: 6,label: 'Good',class: 'score-good',reason:'Slower triple parity rebuild', timePerTB: 6} }
+      };
+      return explanations[raidType] || explanations['mirror'];
+    }
+    function failureTolerance(raidType) {
+      if (raidType === 'raid0') return 'Tolerates 0 drive failures.';
+      if (raidType === 'mirror') {
+        return `Tolerates up to ${Math.max(0, currentDriveCount - 1)} drive failures (as long as one drive remains).`;
+      }
+      if (raidType === 'raid10') return '1 failure per vdev; multiple failures OK if in different vdevs.';
+      if (raidType === 'raid5') return 'Tolerates 1 drive failure in the array.';
+      if (raidType === 'raid6') return 'Tolerates 2 drive failures in the array.';
+      if (raidType === 'raidz1') return 'Tolerates 1 drive failure across the pool (per vdev).';
+      if (raidType === 'raidz2') return 'Tolerates 2 drive failures across the pool (per vdev).';
+      if (raidType === 'raidz3') return 'Tolerates 3 drive failures across the pool (per vdev).';
+      return '';
+    }
+    // Mirror validation + warning UI
+    function isMirrorInvalid(){
+      return currentRaidType === 'mirror' && currentDriveCount < 2;
+    }
+    function setInvalidWarning(){
+      const warn = document.getElementById('invalid-warning');
+      const driveSel = document.getElementById('drive-count');
+      if (!warn || !driveSel) return;
+      if (isMirrorInvalid()){
+        const msg = `RAID 1 requires at least 2 drives. You selected ${currentDriveCount}.`;
+        warn.innerHTML = `<h5>Invalid RAID 1 layout</h5><p>${msg}</p>`;
+        warn.classList.remove('hidden');
+        driveSel.classList.add('error');
+      } else {
+        warn.classList.add('hidden');
+        warn.innerHTML = '';
+        driveSel.classList.remove('error');
+      }
+    }
+    function updateRaidExplanation() {
+      const e = getRaidExplanation(currentRaidType);
+      document.getElementById('explanation-title').textContent = e.title;
+      document.getElementById('explanation-content').innerHTML = `<div class="explanation-text">${e.explanation}</div>`;
+      document.getElementById('fault-tolerance').textContent = failureTolerance(currentRaidType);
+      const perf = calculatePerformance(currentDriveCount, currentRaidType);
+      const norm = Math.max(1, currentDriveCount);
+      const readScore = Math.min(10, Math.max(1, Math.round((perf.read / norm) * 10)));
+      const writeScore = Math.min(10, Math.max(1, Math.round((perf.write / norm) * 10)));
+      const scoreClass = (n) => n >= 8 ? 'score-excellent' : n >= 6 ? 'score-good' : n >= 4 ? 'score-fair' : 'score-poor';
+      const scoringHtml = `
+        <div class="score-grid">
+          <div class="score-card" title="Relative sequential READ throughput vs a single drive, normalized by drive count.">
+            <h5>Read</h5>
+            <div class="score-value ${scoreClass(readScore)}">${readScore}/10</div>
+            <div class="score-description">${perf.read.toFixed(1)}× vs single drive</div>
+          </div>
+          <div class="score-card" title="Relative sequential WRITE throughput vs a single drive, normalized by drive count.">
+            <h5>Write</h5>
+            <div class="score-value ${scoreClass(writeScore)}">${writeScore}/10</div>
+            <div class="score-description">${perf.write.toFixed(1)}× vs single drive (${workloadMode === 'seq' ? 'Sequential' : 'Random'})</div>
+          </div>
+          <div class="score-card" title="Likelihood of surviving disk failures">
+            <h5>Risk</h5>
+            <div class="score-value ${e.risk.class}">${e.risk.score}/10</div>
+            <div class="score-description">${e.risk.label}<br><em>${e.risk.reason}</em></div>
+          </div>
+          <div class="score-card" title="Storage efficiency (usable/raw)">
+            <h5>Cost</h5>
+            <div class="score-value ${e.cost.class}">${e.cost.score}/10</div>
+            <div class="score-description">${e.cost.label}<br><em>${e.cost.reason}</em></div>
+          </div>
+          <div class="score-card" title="Estimated ease/speed of rebuilds">
+            <h5>Rebuild</h5>
+            <div class="score-value ${e.rebuild.class}">${e.rebuild.score === 'N/A' ? 'N/A' : e.rebuild.score + '/10'}</div>
+            <div class="score-description">${e.rebuild.label}<br><em>${e.rebuild.reason}</em></div>
+          </div>
+        </div>`;
+      document.getElementById('scoring-section').innerHTML = scoringHtml;
+    }
+    function renderConfigSummary() {
+      const driveCount = currentDriveCount;
+      const types = ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'];
+      const container = document.getElementById('config-details');
+      if (!container) return; // section removed in streamlined UI
+      let html = `<strong>With ${driveCount} drives:</strong><br><br>`;
+      for (const t of types) {
+        const perf = calculatePerformance(driveCount, t);
+        const label = RAID_LABEL[t];
+        if (perf.valid) {
+          const eff = ((perf.usable / driveCount) * 100).toFixed(0);
+          html += `<strong>${label}:</strong> ${perf.read.toFixed(1)}x read, ${perf.write.toFixed(1)}x write, ${eff}% storage efficiency`;
+          if (t === 'mirror') html += ` (mirror width: ${mirrorWidth})`;
+          if (t.startsWith('raidz') && advancedMode) html += ` (vdev width: ${vdevWidth})`;
+          html += '<br>';
+        } else {
+          const req = t==='raid10' ? 'Requires even number of drives (2-way mirrors)'
+            : t==='mirror' ? `Drive count must be divisible by mirror width (${mirrorWidth})`
+            : t==='raid5' ? 'Requires at least 3 drives'
+            : t==='raid6' ? 'Requires at least 4 drives'
+            : `Requires multiples of vdev width (${vdevWidth})`;
+          html += `<strong>${label}:</strong> ${req}<br>`;
+        }
+      }
+      container.innerHTML = html;
+    }
+    function createChart() {
+      const ctx = document.getElementById('chart').getContext('2d');
+      const driveCount = currentDriveCount;
+      const perf = calculatePerformance(driveCount, currentRaidType);
+      if (chart) chart.destroy();
+      if (!perf.valid) {
+        chart = new Chart(ctx, {
+          type: 'bar',
+          data: { labels: ['Configuration Error'], datasets: [{ label: 'Invalid Configuration', data: [0], backgroundColor: 'rgba(220,53,69,0.7)', borderColor: 'rgba(220,53,69,1)', borderWidth: 2 }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { title: { display: true, text: `${RAID_LABEL[currentRaidType]} not possible with ${driveCount} drives` }, legend: { labels: { color: '#333' } } },
+            scales: { y: { beginAtZero: true, ticks: { color: '#333' } }, x: { ticks: { color: '#333' } } }
+          }
+        });
+        return;
+      }
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Single Drive', `${driveCount} Drives (${RAID_LABEL[currentRaidType]})`],
+          datasets: [
+            { label: 'Read Speed (x faster)', data: [1, perf.read], backgroundColor: 'rgba(54, 162, 235, 0.7)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 2 },
+            { label: 'Write Speed (x faster)', data: [1, perf.write], backgroundColor: 'rgba(255, 99, 132, 0.7)', borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 2 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: `${RAID_LABEL[currentRaidType]} Performance with ${driveCount} Drives (${workloadMode === 'seq' ? 'Sequential' : 'Random'})` },
+            legend: { display: true, position: 'top', labels: { color: '#333' } }
+          },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Speed Multiplier' }, ticks: { color: '#333' } },
+            x: { title: { display: true, text: 'Configuration' }, ticks: { color: '#333' } }
+          }
+        }
+      });
+    }
+    function updateStorageInfo() {
+      const storageDisplay = document.getElementById('storage-display');
+      const perf = calculatePerformance(currentDriveCount, currentRaidType);
+      if (!storageDisplay) return;
+      if (!currentDriveSize || currentDriveSize <= 0) {
+        storageDisplay.innerHTML = '<p style="text-align:center; color:#666; font-style:italic; margin:8px 0;">Select a drive size to see storage breakdown</p>';
+        return;
+      }
+      if (!perf.valid) {
+        const danger = getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#dc3545';
+        storageDisplay.innerHTML = `<p style=\"text-align:center; color:${danger}; font-style:italic;\">Invalid configuration for ${RAID_LABEL[currentRaidType]} with ${currentDriveCount} drives</p>`;
+        return;
+      }
+      const useBinary = document.getElementById('binary-units').checked;
+      const reserve10 = document.getElementById('reserve-10').checked;
+      const unit = useBinary ? 'TiB' : 'TB';
+      const factor = useBinary ? (1000/1024) : 1; // approx to convert user-entered TB to TiB display
+      let total = currentDriveSize * currentDriveCount; // TB
+      let usableDrives = perf.usable; // in drive units
+      let usableRaid = usableDrives * currentDriveSize; // TB - RAID efficiency only
+      let usableAfterReserve = usableRaid; // TB - after operational reserve
+      if (reserve10) usableAfterReserve *= 0.9;
+      
+      total *= factor; 
+      usableRaid *= factor;
+      usableAfterReserve *= factor;
+      
+      const lostToRaid = Math.max(0, total - usableRaid);
+      const lostToReserve = Math.max(0, usableRaid - usableAfterReserve);
+      const raidEff = total > 0 ? ((usableRaid / total) * 100).toFixed(1) : '0.0'; // Pure RAID efficiency
+      
+      storageDisplay.innerHTML = `
+        <div class=\"storage-grid\">
+          <div class=\"storage-item storage-total\">
+            <div class=\"storage-label\" title=\"All drive capacity combined before any reductions.\">Total Raw Space</div>
+            <div class=\"storage-value\">${total.toFixed(1)} ${unit}</div>
+          </div>
+          <div class=\"storage-item storage-usable\">
+            <div class=\"storage-label\" title=\"Space available for your data after RAID overhead${reserve10 ? ' and 10% operational reserve' : ''}.\">Available Space${reserve10 ? ' (with 10% reserve)' : ''}</div>
+            <div class=\"storage-value\">${usableAfterReserve.toFixed(1)} ${unit}</div>
+          </div>
+          <div class=\"storage-item storage-lost\">
+            <div class=\"storage-label\" title=\"Space lost to RAID redundancy${reserve10 ? ' plus operational reserve' : ''}.\">Lost Space</div>
+            <div class=\"storage-value\">${(lostToRaid + lostToReserve).toFixed(1)} ${unit}</div>
+          </div>
+          <div class=\"storage-item\">
+            <div class=\"storage-label\" title=\"RAID efficiency: usable space after redundancy ÷ raw space × 100%. Does not include operational reserves.\">RAID Efficiency</div>
+            <div class=\"storage-value\">${raidEff}%</div>
+          </div>
+        </div>`;
+    }
+    function updateRebuildNote(){
+      const note = document.getElementById('rebuild-note');
+      const noteText = document.getElementById('rebuild-note-text');
+      if (!note || !noteText) return;
+      const e = getRaidExplanation(currentRaidType);
+      if (e.rebuild.timePerTB && currentDriveSize > 0) {
+        const useBinary = document.getElementById('binary-units').checked;
+        const estimatedHours = (currentDriveSize * e.rebuild.timePerTB).toFixed(1);
+        note.classList.remove('hidden');
+        noteText.textContent = `~${estimatedHours} hours to rebuild one failed ${currentDriveSize}${useBinary ? ' TiB' : ' TB'} drive.`;
+      } else {
+        note.classList.add('hidden');
+        noteText.textContent = '';
+      }
+    }
+    function applyAdvancedVisibility(){
+      // Hide/show advanced UI groups
+      const advToggles = document.getElementById('advanced-toggles');
+      const vdevWrap = document.getElementById('vdev-wrapper');
+      const mirrorWrap = document.getElementById('mirror-wrapper');
+      const workloadWrap = document.getElementById('workload-wrapper');
+      const isRaidZ = currentRaidType && currentRaidType.startsWith('raidz');
+      const isRaid10 = currentRaidType === 'raid10';
+      if (advToggles) advToggles.classList.toggle('hidden', !advancedMode);
+      if (vdevWrap) vdevWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
+      if (mirrorWrap) mirrorWrap.classList.toggle('hidden', !advancedMode || !isRaid10);
+      if (workloadWrap) workloadWrap.classList.toggle('hidden', !advancedMode);
+    }
+    function switchTab(type) {
+      currentRaidType = type;
+      ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id => {
+        const btn = document.getElementById(`${id}-btn`);
+        btn.classList.toggle('active', id === type);
+        btn.setAttribute('aria-pressed', id === type ? 'true' : 'false');
+      });
+      // Update controls immediately when tab changes
+      refreshVdevWidthOptions();
+      applyAdvancedVisibility();
+      render();
+    }
+    function render(){
+      renderConfigSummary();
+      updateRaidExplanation();
+      createChart();
+      updateStorageInfo();
+      updateRebuildNote();
+      setInvalidWarning();
+      const state = { c: currentDriveCount, t: currentRaidType, s: currentDriveSize, mw: mirrorWidth, vw: vdevWidth, adv: advancedMode, wl: workloadMode };
+      try { localStorage.setItem('raidcalc', JSON.stringify(state)); } catch(e) {}
+      applyAdvancedVisibility();
+    }
+    // Event listeners
+    document.getElementById('drive-count').addEventListener('change', (e)=>{
+      currentDriveCount = parseInt(e.target.value,10); refreshVdevWidthOptions(); render();
+    });
+    document.getElementById('drive-size').addEventListener('change', (e)=>{
+      currentDriveSize = parseFloat(e.target.value); render();
+    });
+    document.getElementById('mirror-width').addEventListener('change', (e)=>{
+      mirrorWidth = parseInt(e.target.value,10); render();
+    });
+    document.getElementById('vdev-width').addEventListener('change', (e)=>{
+      vdevWidth = parseInt(e.target.value,10); render();
+    });
+    document.getElementById('binary-units').addEventListener('change', render);
+    document.getElementById('reserve-10').addEventListener('change', render);
+    const advToggleEl = document.getElementById('advanced-toggle');
+    if (advToggleEl) {
+      advToggleEl.addEventListener('change', (e)=>{
+        advancedMode = !!e.target.checked;
+        applyAdvancedVisibility();
+        render();
+      });
+    }
+    const workloadSel = document.getElementById('workload-mode');
+    if (workloadSel) {
+      workloadSel.addEventListener('change', (e)=>{ workloadMode = e.target.value; render(); });
+    }
+    ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'].forEach(id=>{
+      document.getElementById(`${id}-btn`).addEventListener('click', ()=> { switchTab(id); });
+    });
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        const st = JSON.parse(localStorage.getItem('raidcalc')||'{}');
+        if (st.c) { currentDriveCount = st.c; document.getElementById('drive-count').value = String(st.c); }
+        if (st.s!=null) { currentDriveSize = st.s; document.getElementById('drive-size').value = String(st.s); }
+        if (st.mw) { mirrorWidth = st.mw; document.getElementById('mirror-width').value = String(st.mw); }
+        if (st.vw) { vdevWidth = st.vw; }
+        if (st.t) { currentRaidType = st.t; }
+        if (typeof st.adv !== 'undefined') { advancedMode = !!st.adv; }
+        if (st.wl) { workloadMode = st.wl; const sel = document.getElementById('workload-mode'); if (sel) sel.value = workloadMode; }
+      } catch(e) {}
+      document.getElementById('advanced-toggle').checked = advancedMode;
+      applyAdvancedVisibility();
+      refreshVdevWidthOptions();
+      switchTab(currentRaidType);
+    });
+    // Helper to show only valid RAIDZ vdev widths for the current drive count & parity
+    function refreshVdevWidthOptions() {
+      const sel = document.getElementById('vdev-width');
+      const was = vdevWidth;
+      const candidates = [4,6,8,10,12,14,16];
+      let parity = 0;
+      if (currentRaidType === 'raidz1') parity = 1;
+      else if (currentRaidType === 'raidz2') parity = 2;
+      else if (currentRaidType === 'raidz3') parity = 3;
+      const valid = candidates.filter(w => w <= currentDriveCount && w >= (parity + 1));
+      const isRaidZ = currentRaidType.startsWith('raidz');
+      sel.innerHTML = '';
+      (isRaidZ ? valid : candidates.slice(0,5)).forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = String(w);
+        opt.textContent = String(w);
+        sel.appendChild(opt);
+      });
+      const keep = valid.includes(was) ? was : (valid.filter(w=> currentDriveCount % w === 0).pop() || valid.pop() || was);
+      vdevWidth = keep || was;
+      sel.value = String(vdevWidth);
+    }
+  </script>
+</body>
+</html>
