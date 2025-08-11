@@ -256,6 +256,21 @@
     // Initialize Chart.js
     const hasChart = typeof window.Chart !== 'undefined';
     if (hasChart) { Chart.defaults.color = '#333'; }
+    // Progress bar color helper
+    function getProgressBarColor(percentage) {
+      if (percentage >= 80) {
+        return '#28a745'; // Green for excellent (80-100%)
+      } else if (percentage >= 60) {
+        return '#17a2b8'; // Blue for good (60-79%)
+      } else if (percentage >= 40) {
+        return '#ffc107'; // Yellow for fair (40-59%)
+      } else if (percentage >= 20) {
+        return '#fd7e14'; // Orange for poor (20-39%)
+      } else {
+        return '#dc3545'; // Red for very poor (0-19%)
+      }
+    }
+    
     // SLOG sizing calculation
     function calculateSlogSize(ramGB, workload) {
       const multipliers = {
@@ -706,21 +721,21 @@
             <div class="comparison-triangle-bar">
               <div class="comparison-triangle-label">Cheap</div>
               <div class="comparison-triangle-progress">
-                <div class="comparison-triangle-fill" style="width: ${triangleScores.cheap}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.cheap}%; background: ${getProgressBarColor(triangleScores.cheap)};"></div>
               </div>
               <div class="comparison-triangle-value">${triangleScores.cheap.toFixed(0)}%</div>
             </div>
             <div class="comparison-triangle-bar">
               <div class="comparison-triangle-label">Fast</div>
               <div class="comparison-triangle-progress">
-                <div class="comparison-triangle-fill" style="width: ${triangleScores.fast}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.fast}%; background: ${getProgressBarColor(triangleScores.fast)};"></div>
               </div>
               <div class="comparison-triangle-value">${triangleScores.fast.toFixed(0)}%</div>
             </div>
             <div class="comparison-triangle-bar">
               <div class="comparison-triangle-label">Reliable</div>
               <div class="comparison-triangle-progress">
-                <div class="comparison-triangle-fill" style="width: ${triangleScores.reliable}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+                <div class="comparison-triangle-fill" style="width: ${triangleScores.reliable}%; background: ${getProgressBarColor(triangleScores.reliable)};"></div>
               </div>
               <div class="comparison-triangle-value">${triangleScores.reliable.toFixed(0)}%</div>
             </div>
@@ -841,21 +856,21 @@
             <div class="triangle-bar">
               <div class="triangle-label">Cheap (Storage Efficiency)</div>
               <div class="triangle-progress">
-                <div class="triangle-fill" style="width: ${triangleScores.cheap}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+                <div class="triangle-fill" style="width: ${triangleScores.cheap}%; background: ${getProgressBarColor(triangleScores.cheap)};"></div>
               </div>
               <div class="triangle-value">${triangleScores.cheap.toFixed(0)}%</div>
             </div>
             <div class="triangle-bar">
               <div class="triangle-label">Fast (Performance)</div>
               <div class="triangle-progress">
-                <div class="triangle-fill" style="width: ${triangleScores.fast}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+                <div class="triangle-fill" style="width: ${triangleScores.fast}%; background: ${getProgressBarColor(triangleScores.fast)};"></div>
               </div>
               <div class="triangle-value">${triangleScores.fast.toFixed(0)}%</div>
             </div>
             <div class="triangle-bar">
               <div class="triangle-label">Reliable (Fault Tolerance)</div>
               <div class="triangle-progress">
-                <div class="triangle-fill" style="width: ${triangleScores.reliable}%; background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);"></div>
+                <div class="triangle-fill" style="width: ${triangleScores.reliable}%; background: ${getProgressBarColor(triangleScores.reliable)};"></div>
               </div>
               <div class="triangle-value">${triangleScores.reliable.toFixed(0)}%</div>
             </div>
@@ -998,7 +1013,7 @@
           },
           scales: {
             y: { beginAtZero: true, title: { display: true, text: 'Speed Multiplier' }, ticks: { color: '#333' } },
-            x: { title: { display: true, text: 'Configuration' }, ticks: { color: '#333' } }
+            x: { title: { display: true, text: 'Configuration' }, ticks: { color: '#333' } } 
           }
         }
       });
@@ -1067,6 +1082,9 @@
         const useBinary = document.getElementById('binary-units').checked;
         const estimatedHours = (currentDriveSize * e.rebuild.timePerTB).toFixed(1);
         note.classList.remove('hidden');
+        noteText.textContent = `~${estimatedHours} hours to rebuild one failed ${currentDriveSize}${useBinary ? ' TiB' : ' TB'} drive.`;
+      } else {
+        note.classList.add('hidden');
         noteText.textContent = '';
       }
     }
