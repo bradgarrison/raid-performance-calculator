@@ -193,6 +193,19 @@ Random = many small writes (heavy parity IO amplification).">
   </div>
 
   <script>
+    // --- lightweight in-page error reporter (so we see errors without console) ---
+    window.onerror = function(message, source, lineno, colno, error) {
+      const warn = document.getElementById('invalid-warning');
+      if (!warn) return;
+      warn.classList.remove('hidden');
+      warn.innerHTML = `
+        <h5>Script error</h5>
+        <p style="margin:4px 0 0">
+          ${String(message)}<br>
+          <small>${source || ''}:${lineno || ''}:${colno || ''}</small>
+        </p>`;
+    };
+
     // Chart.js guard (in case CDN blocked)
     const hasChart = typeof window.Chart !== 'undefined';
     if (hasChart) { Chart.defaults.color = '#333'; }
@@ -279,7 +292,6 @@ Random = many small writes (heavy parity IO amplification).">
     }
 
     function getRaidExplanation(raidType) {
-      // Compute to map write score class correctly
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
       const norm = Math.max(1, currentDriveCount);
       const actualWriteScore = perf.valid ? Math.min(10, Math.max(1, Math.round((perf.write / norm) * 10))) : 1;
@@ -311,7 +323,6 @@ Random = many small writes (heavy parity IO amplification).">
       return '';
     }
 
-    // Invalid warning UI (full config, not just mirror)
     function setInvalidWarning(){
       const warn = document.getElementById('invalid-warning');
       const driveSel = document.getElementById('drive-count');
@@ -337,7 +348,6 @@ Random = many small writes (heavy parity IO amplification).">
       document.getElementById('fault-tolerance').textContent = failureTolerance(currentRaidType);
       const perf = calculatePerformance(currentDriveCount, currentRaidType);
 
-      // show invalid panel instead of scores
       const msg = configError(currentRaidType, currentDriveCount);
       if (msg || !perf.valid){
         document.getElementById('scoring-section').innerHTML = `
@@ -480,13 +490,13 @@ Random = many small writes (heavy parity IO amplification).">
       const useBinary = document.getElementById('binary-units').checked;
       const reserve10 = document.getElementById('reserve-10').checked;
       const unit = useBinary ? 'TiB' : 'TB';
-      const factor = useBinary ? (1000/1024) : 1; // display conversion only
-      let total = currentDriveSize * currentDriveCount; // TB
-      let usableDrives = perf.usable; // drive units
-      let usableRaid = usableDrives * currentDriveSize; // TB
+      const factor = useBinary ? (1000/1024) : 1;
+      let total = currentDriveSize * currentDriveCount;
+      let usableDrives = perf.usable;
+      let usableRaid = usableDrives * currentDriveSize;
       let usableAfterReserve = reserve10 ? usableRaid * 0.9 : usableRaid;
 
-      total *= factor; 
+      total *= factor;
       usableRaid *= factor;
       usableAfterReserve *= factor;
 
@@ -544,7 +554,6 @@ Random = many small writes (heavy parity IO amplification).">
       if (workloadWrap) workloadWrap.classList.toggle('hidden', !advancedMode);
     }
 
-    // Auto-pick RAIDZ vdev width when Advanced is OFF
     function pickDefaultRaidZWidth(driveCount, parity){
       const preferred = [4,6,8,10,12,14,16,5,7,9,11,13,15];
       const candidate = preferred.filter(w => w <= driveCount && w >= (parity+1) && (driveCount % w === 0)).pop();
@@ -559,7 +568,6 @@ Random = many small writes (heavy parity IO amplification).">
       if (sel) sel.value = String(vdevWidth);
     }
 
-    // Disable clearly invalid RAID buttons for current drive count
     function updateRaidButtonsDisabledState(){
       const types = ['mirror','raid0','raid10','raid5','raid6','raidz1','raidz2','raidz3'];
       types.forEach(t=>{
@@ -597,7 +605,6 @@ Random = many small writes (heavy parity IO amplification).">
       applyAdvancedVisibility();
     }
 
-    // Events
     document.getElementById('drive-count').addEventListener('change', (e)=>{
       currentDriveCount = parseInt(e.target.value,10);
       refreshVdevWidthOptions();
@@ -633,7 +640,6 @@ Random = many small writes (heavy parity IO amplification).">
       document.getElementById(`${id}-btn`).addEventListener('click', ()=> { switchTab(id); });
     });
 
-    // Init
     document.addEventListener('DOMContentLoaded', () => {
       try {
         const st = JSON.parse(localStorage.getItem('raidcalc')||'{}');
@@ -653,29 +659,38 @@ Random = many small writes (heavy parity IO amplification).">
       switchTab(currentRaidType);
     });
 
-    // Show only valid RAIDZ widths for current count/parity
     function refreshVdevWidthOptions() {
       const sel = document.getElementById('vdev-width');
       const was = vdevWidth;
-      const candidates = [4,5,6,7,8,9,10,11,12,13,14,15,16];
+      const isRaidZ = currentRaidType.startsWith('raidz');
+
       let parity = 0;
       if (currentRaidType === 'raidz1') parity = 1;
       else if (currentRaidType === 'raidz2') parity = 2;
       else if (currentRaidType === 'raidz3') parity = 3;
-      const valid = candidates.filter(w => w <= currentDriveCount && w >= (parity + 1));
-      const isRaidZ = currentRaidType.startsWith('raidz');
-      if (sel){
+
+      const upper = Math.min(currentDriveCount, 16);
+      const divisible = [];
+      for (let w = Math.max(parity + 1, 2); w <= upper; w++) {
+        if (currentDriveCount % w === 0) divisible.push(w);
+      }
+
+      if (sel) {
         sel.innerHTML = '';
-        (isRaidZ ? valid : candidates.slice(0,5)).forEach(w => {
+        const list = isRaidZ ? divisible : [4, 6, 8, 10, 12];
+        list.forEach(w => {
           const opt = document.createElement('option');
           opt.value = String(w);
           opt.textContent = String(w);
           sel.appendChild(opt);
         });
       }
-      const keep = valid.includes(was) ? was : (valid.filter(w=> currentDriveCount % w === 0).pop() || valid.pop() || was);
-      vdevWidth = keep || was;
-      if (sel) sel.value = String(vdevWidth);
+
+      if (isRaidZ) {
+        const fallback = divisible.length ? divisible[divisible.length - 1] : Math.max(parity + 1, Math.min(currentDriveCount, 16));
+        vdevWidth = divisible.includes(was) ? was : fallback;
+        if (sel) sel.value = String(vdevWidth);
+      }
     }
   </script>
 </body>
