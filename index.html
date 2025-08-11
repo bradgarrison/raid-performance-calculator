@@ -190,11 +190,31 @@
           <option value="256">256 GB</option>
         </select>
       </div>
+      <div class="drive-selector" id="l2arc-wrapper">
+        <label for="l2arc-size">L2ARC Cache:</label>
+        <select id="l2arc-size">
+          <option value="0">None</option>
+          <option value="auto" selected>Auto (3x RAM)</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="drive-selector" id="l2arc-custom-wrapper" style="display: none;">
+        <label for="l2arc-custom">L2ARC Size:</label>
+        <select id="l2arc-custom">
+          <option value="64">64 GB</option>
+          <option value="128">128 GB</option>
+          <option value="256">256 GB</option>
+          <option value="512">512 GB</option>
+          <option value="1024">1 TB</option>
+          <option value="2048">2 TB</option>
+        </select>
+      </div>
     </div>
     <div class="toggles" id="advanced-toggles">
       <label><input type="checkbox" id="binary-units"> Use TiB (binary)</label>
       <label><input type="checkbox" id="reserve-10"> Reserve 10% free space</label>
       <label id="slog-wrapper"><input type="checkbox" id="slog-device"> Add SLOG device</label>
+      <label id="special-wrapper"><input type="checkbox" id="special-vdev"> Add Special vdev (metadata)</label>
     </div>
     <div class="tab-buttons">
       <button class="tab-btn active" id="mirror-btn">RAID 1</button>
@@ -241,6 +261,9 @@
     let perfModel = 'theoretical';
     let slogEnabled = false;
     let systemRam = 32;
+    let l2arcSize = 'auto';
+    let l2arcCustomSize = 256;
+    let specialVdevEnabled = false;
     let comparisonMode = false;
     let lockedConfig = null;
     // Constants
@@ -1096,6 +1119,8 @@
       const perfModelWrap = document.getElementById('perf-model-wrapper');
       const ramWrap = document.getElementById('ram-wrapper');
       const slogWrap = document.getElementById('slog-wrapper');
+      const l2arcWrap = document.getElementById('l2arc-wrapper');
+      const specialWrap = document.getElementById('special-wrapper');
       const isRaidZ = currentRaidType && currentRaidType.startsWith('raidz');
       const isRaid10 = currentRaidType === 'raid10';
       
@@ -1106,6 +1131,8 @@
       if (perfModelWrap) perfModelWrap.classList.toggle('hidden', !advancedMode);
       if (ramWrap) ramWrap.classList.toggle('hidden', !advancedMode);
       if (slogWrap) slogWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
+      if (l2arcWrap) l2arcWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
+      if (specialWrap) specialWrap.classList.toggle('hidden', !advancedMode || !isRaidZ);
     }
     function pickDefaultRaidZWidth(driveCount, parity) {
       const preferred = [4,6,8,10,12,14,16,5,7,9,11,13,15];
@@ -1214,6 +1241,25 @@
     
     document.getElementById('system-ram').addEventListener('change', (e) => {
       systemRam = parseInt(e.target.value, 10);
+      render();
+    });
+    
+    document.getElementById('l2arc-size').addEventListener('change', (e) => {
+      l2arcSize = e.target.value;
+      const customWrapper = document.getElementById('l2arc-custom-wrapper');
+      if (customWrapper) {
+        customWrapper.style.display = l2arcSize === 'custom' ? 'flex' : 'none';
+      }
+      render();
+    });
+    
+    document.getElementById('l2arc-custom').addEventListener('change', (e) => {
+      l2arcCustomSize = parseInt(e.target.value, 10);
+      render();
+    });
+    
+    document.getElementById('special-vdev').addEventListener('change', (e) => {
+      specialVdevEnabled = !!e.target.checked;
       render();
     });
     
